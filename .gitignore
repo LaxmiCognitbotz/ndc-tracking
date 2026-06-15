@@ -1,0 +1,26 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+__init__.py
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Environment
+.env
+
+# Uploads
+uploads/
+
+# Alembic
+alembic.ini
+
+# Logs
+logs/
+
+# Alembic history
+alembic/versions/
