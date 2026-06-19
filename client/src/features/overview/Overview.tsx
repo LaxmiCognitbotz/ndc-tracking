@@ -1,0 +1,659 @@
+import { useState, useMemo, useEffect } from "react";
+import { NDCRecord } from "../../types";
+import axios from "axios";
+import { exportToExcel } from "../../utils/excelExport";
+import { createPPT, addImageSlide } from "../../utils/pptExport";
+import { PPTDownloadButton } from "../../components/common/PPTDownloadButton";
+import { KPICard } from "../../components/common/KPICard";
+import { FilterBar } from "./components/FilterBar";
+import { DataModal } from "../../components/common/DataModal";
+import { NDCTable } from "../../components/common/NDCTable";
+import { FullScreenModal } from "../../components/common/FullScreenModal";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../../components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "../../components/ui/popover";
+import { Calendar } from "../../components/ui/calendar";
+import { format } from "date-fns";
+import {
+  Users,
+
+  CheckCircle,
+  Clock,
+  AlertCircle,
+  TrendingUp,
+  Building2,
+  XCircle,
+  Download,
+
+  RefreshCw,
+  FolderOpen,
+  CalendarIcon,
+  Mail,
+  AlertTriangle,
+} from "lucide-react";
+
+export function Overview() {
+  const [mockNDCData, setMockNDCData] = useState<NDCRecord[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    axios.get("/api/v1/ndc-records").then((res) => {
+      setMockNDCData(res.data);
+      setIsLoading(false);
+    });
+  }, []);
+
+  const [ndcStageFilter, setNdcStageFilter] = useState("");
+  const [approvalDepartmentFilter, setApprovalDepartmentFilter] = useState("");
+  const [approvalStatusFilter, setApprovalStatusFilter] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [sortColumn, setSortColumn] = useState<keyof NDCRecord | "">("");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalData, setModalData] = useState<{ title: string; data: NDCRecord[] }>({ title: "", data: [] });
+  const [openNDCModalOpen, setOpenNDCModalOpen] = useState(false);
+  const [closedNDCModalOpen, setClosedNDCModalOpen] = useState(false);
+  const [delayedCasesModalOpen, setDelayedCasesModalOpen] = useState(false);
+  const [ndcDelayedTableOpen, setNdcDelayedTableOpen] = useState(false);
+  const [fnfDelayedTableOpen, setFnfDelayedTableOpen] = useState(false);
+  const [totalExitModalOpen, setTotalExitModalOpen] = useState(false);
+  const [inProgressModalOpen, setInProgressModalOpen] = useState(false);
+  const [pendingApprovalModalOpen, setPendingApprovalModalOpen] = useState(false);
+  const [overdueModalOpen, setOverdueModalOpen] = useState(false);
+  const [historicalDate, setHistoricalDate] = useState<Date>();
+  const itemsPerPage = 10;
+
+  const ndcStages = useMemo(() => {
+    return Array.from(new Set(mockNDCData.map((record) => record.ndcStage))).sort();
+  }, [mockNDCData]);
+
+  const getOverallStatus = (record: NDCRecord) => {
+    const statuses = [
+      record.rmApprovalStatus,
+      record.itApprovalStatus,
+      record.abexApprovalStatus,
+      record.telecomApprovalStatus,
+      record.safetyApprovalStatus,
+      record.administrationApprovalStatus,
+      record.securityApprovalStatus,
+      record.hrApprovalStatus,
+      record.gccHrApprovalStatus,
+      record.finalAbexApprovalStatus,
+    ].filter((s) => s !== "Not Applicable" && s !== "");
+
+    if (statuses.some((s) => s === "Pending")) return "Pending";
+    if (statuses.some((s) => s === "In Progress")) return "In Progress";
+    if (statuses.every((s) => s === "Completed")) return "Completed";
+    return "In Progress";
+  };
+
+  const isOverdue = (record: NDCRecord) => {
+    if (record.ndcCompletedDate) return false;
+    const lastWorking = new Date(record.lastWorkingDate);
+    const today = new Date();
+    return today > lastWorking;
+  };
+
+  const getDelayedDays = (record: NDCRecord) => {
+    if (record.ndcCompletedDate) return 0;
+    const lastWorking = new Date(record.lastWorkingDate);
+    const today = new Date();
+    return Math.ceil((today.getTime() - lastWorking.getTime()) / (1000 * 60 * 60 * 24));
+  };
+
+  const applyApprovalFilters = (filtered: NDCRecord[]) => {
+    if (approvalDepartmentFilter && approvalStatusFilter) {
+      const statusMap: Record<string, string> = {
+        'rm': 'rmApprovalStatus', 'it': 'itApprovalStatus', 'abex': 'abexApprovalStatus',
+        'telecom': 'telecomApprovalStatus', 'store': 'storeApprovalStatus', 'safety': 'safetyApprovalStatus',
+        'administration': 'administrationApprovalStatus', 'security': 'securityApprovalStatus',
+        'hr': 'hrApprovalStatus', 'gcchr': 'gccHrApprovalStatus', 'finalabex': 'finalAbexApprovalStatus'
+      };
+      const fieldName = statusMap[approvalDepartmentFilter.toLowerCase().replace(/\s+/g, '')] as keyof NDCRecord;
+      return filtered.filter((r) => fieldName && r[fieldName] === approvalStatusFilter);
+    } else if (approvalDepartmentFilter) {
+      const statusMap: Record<string, string> = {
+        'rm': 'rmApprovalStatus', 'it': 'itApprovalStatus', 'abex': 'abexApprovalStatus',
+        'telecom': 'telecomApprovalStatus', 'store': 'storeApprovalStatus', 'safety': 'safetyApprovalStatus',
+        'administration': 'administrationApprovalStatus', 'security': 'securityApprovalStatus',
+        'hr': 'hrApprovalStatus', 'gcchr': 'gccHrApprovalStatus', 'finalabex': 'finalAbexApprovalStatus'
+      };
+      const fieldName = statusMap[approvalDepartmentFilter.toLowerCase().replace(/\s+/g, '')] as keyof NDCRecord;
+      return filtered.filter((r) => fieldName && r[fieldName] !== "");
+    } else if (approvalStatusFilter) {
+      return filtered.filter((r) => {
+        const statuses = [
+          r.rmApprovalStatus, r.itApprovalStatus, r.abexApprovalStatus, r.telecomApprovalStatus,
+          r.storeApprovalStatus, r.safetyApprovalStatus, r.administrationApprovalStatus,
+          r.securityApprovalStatus, r.hrApprovalStatus, r.gccHrApprovalStatus, r.finalAbexApprovalStatus
+        ];
+        return statuses.some((status) => status === approvalStatusFilter);
+      });
+    }
+    return filtered;
+  };
+
+  const filteredData = useMemo(() => {
+    let filtered = mockNDCData;
+    if (ndcStageFilter) filtered = filtered.filter((r) => r.ndcStage === ndcStageFilter);
+    filtered = applyApprovalFilters(filtered);
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(
+        (r) => r.employeeName.toLowerCase().includes(query) || r.personNumber.toLowerCase().includes(query)
+      );
+    }
+    return filtered;
+  }, [mockNDCData, ndcStageFilter, approvalDepartmentFilter, approvalStatusFilter, searchQuery]);
+
+  const sortedData = useMemo(() => {
+    if (!sortColumn) return filteredData;
+    return [...filteredData].sort((a, b) => {
+      const aValue = a[sortColumn];
+      const bValue = b[sortColumn];
+      if (aValue < bValue) return sortDirection === "asc" ? -1 : 1;
+      if (aValue > bValue) return sortDirection === "asc" ? 1 : -1;
+      return 0;
+    });
+  }, [filteredData, sortColumn, sortDirection]);
+
+  const kpis = useMemo(() => {
+    const base = mockNDCData;
+
+    const totalNDC = base.length;
+    const closedNDC = base.filter((r) => r.ndcCompletedDate && getOverallStatus(r) === "Completed").length;
+    const openNDC = totalNDC - closedNDC;
+    const openCases = base.filter((r) => !r.ndcCompletedDate || getOverallStatus(r) !== "Completed");
+    const closedCases = base.filter((r) => r.ndcCompletedDate && getOverallStatus(r) === "Completed");
+
+    const recoveryPending = openCases.filter((r) => r.recoveryStatus === "Pending").length;
+    const ndcPendingGCC = openCases.filter((r) => r.gccHrApprovalStatus === "Pending" || r.gccHrApprovalStatus === "In Progress").length;
+
+    const delayed7to30 = base.filter((r) => { const d = getDelayedDays(r); return d >= 7 && d <= 30; }).length;
+    const delayedOver30 = base.filter((r) => getDelayedDays(r) > 30).length;
+    const totalDelayed = delayed7to30 + delayedOver30;
+
+    const fnfDelayed = base.filter((r) => {
+      if (!r.fnfStatus || r.fnfStatus === "Done") return false;
+      const days = Math.ceil((new Date().getTime() - new Date(r.lastWorkingDate).getTime()) / (1000 * 60 * 60 * 24));
+      return days > 0;
+    }).length;
+
+    const closedFnfDone = closedCases.filter((r) => r.fnfStatus === "Done").length;
+    const closedFnfOpen = closedCases.filter((r) => r.fnfStatus === "Open").length;
+    const closedFnfRevision = closedCases.filter((r) => r.fnfStatus === "Revision Required").length;
+
+    const inProgress = base.filter((r) => getOverallStatus(r) === "In Progress").length;
+    const pendingApproval = base.filter((r) => getOverallStatus(r) === "Pending").length;
+    const overdue = base.filter(isOverdue).length;
+
+    // Average completion time (days from lastWorkingDate to ndcCompletedDate for closed cases)
+    const completedWithDates = closedCases.filter((r) => r.ndcCompletedDate && r.lastWorkingDate);
+    const avgCompletionDays = completedWithDates.length > 0
+      ? Math.round(
+          completedWithDates.reduce((sum, r) => {
+            const completed = new Date(r.ndcCompletedDate);
+            const started = new Date(r.lastWorkingDate);
+            return sum + Math.abs((completed.getTime() - started.getTime()) / (1000 * 60 * 60 * 24));
+          }, 0) / completedWithDates.length
+        )
+      : 0;
+
+    return {
+      totalNDC, openNDC, closedNDC, recoveryPending, ndcPendingGCC,
+      delayed7to30, delayedOver30, totalDelayed, fnfDelayed,
+      closedFnfDone, closedFnfOpen, closedFnfRevision,
+      inProgress, pendingApproval, overdue, avgCompletionDays,
+    };
+  }, [mockNDCData]);
+
+  const handleSort = (column: any) => {
+    const col = column as keyof NDCRecord;
+    if (sortColumn === col) setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+    else { setSortColumn(col); setSortDirection("asc"); }
+  };
+
+  const getRowHighlight = (record: NDCRecord) => {
+    const status = getOverallStatus(record);
+    if (status === "Pending") return "bg-red-50";
+    if (status === "Completed") return "bg-green-50";
+    return "";
+  };
+
+  const FullScreenTable = ({ data, title }: { data: NDCRecord[]; title: string }) => (
+    <div className="flex flex-col h-full">
+      <div className="p-4 border-b border-border flex items-center justify-between shrink-0">
+        <h3 className="font-semibold text-foreground">{title} ({data.length})</h3>
+        <button
+          onClick={() => exportToExcel(data, title || "Export")}
+          className="flex items-center gap-2 px-3 py-1.5 bg-primary text-primary-foreground rounded-[4px] hover:bg-primary/90 transition-colors text-sm"
+        >
+          <Download className="w-3 h-3" />
+          Export
+        </button>
+      </div>
+      <div className="overflow-x-auto overflow-y-auto flex-1">
+        <table className="w-full text-sm">
+          <thead className="bg-muted sticky top-0 z-10">
+            <tr>
+              <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Person No.</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Name</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Department</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Last Working Date</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">NDC Stage</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {data.map((r) => (
+              <tr key={r.id} className="hover:bg-muted/50">
+                <td className="px-4 py-3 whitespace-nowrap font-medium">{r.personNumber}</td>
+                <td className="px-4 py-3 whitespace-nowrap">{r.employeeName}</td>
+                <td className="px-4 py-3">{r.department}</td>
+                <td className="px-4 py-3 whitespace-nowrap">{r.lastWorkingDate}</td>
+                <td className="px-4 py-3 whitespace-nowrap">{r.ndcStage}</td>
+              </tr>
+            ))}
+            {data.length === 0 && (
+              <tr><td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">No records found</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+
+  if (isLoading) return <div className="p-8 text-center">Loading...</div>;
+
+  const handleDownloadPPT = async () => {
+    const pptx = createPPT("Overview Dashboard");
+    await addImageSlide(pptx, "KPI Summary", "section-kpi-row1");
+    await addImageSlide(pptx, "Status KPIs", "section-kpi-row2");
+    
+    // const headers = ["Person Number", "Name", "Department", "Last Working Date", "NDC Stage", "Status"];
+    // const rows = sortedData.map(r => [
+    //   r.personNumber,
+    //   r.employeeName,
+    //   r.department,
+    //   r.lastWorkingDate,
+    //   r.ndcStage,
+    //   getOverallStatus(r)
+    // ]);
+    // 
+    // addTableSlide(pptx, "NDC Records", headers, rows);
+    await pptx.writeFile({ fileName: "Overview_Dashboard.pptx" });
+  };
+
+  return (
+    <div className="p-8 space-y-6 h-full flex flex-col bg-background overflow-hidden relative">
+      <div className="mb-8 flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-foreground">HR NDC Tracking Dashboard</h1>
+          <p className="text-muted-foreground mt-2">No Dues Certificate Management System</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <PPTDownloadButton onDownload={handleDownloadPPT} />
+          <Popover>
+            <PopoverTrigger asChild>
+              <button className="flex items-center gap-2 px-4 py-2 bg-card border border-border rounded-[4px] hover:bg-muted transition-colors">
+                <CalendarIcon className="w-4 h-4" />
+                {historicalDate ? format(historicalDate, "PPP") : "Select Date"}
+              </button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="end">
+              <Calendar mode="single" selected={historicalDate} onSelect={setHistoricalDate} initialFocus />
+            </PopoverContent>
+          </Popover>
+          <button
+            onClick={() => alert("Syncing data from OpenText...")}
+            className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-[4px] hover:bg-primary/90 transition-colors"
+          >
+            <RefreshCw className="w-4 h-4" />
+            Sync
+          </button>
+        </div>
+      </div>
+
+      {/* Row 1: Main KPI cards */}
+      <div id="section-kpi-row1" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div onClick={() => setTotalExitModalOpen(true)} className="cursor-pointer hover:scale-105 transition-transform duration-200">
+          <KPICard title="Total Employee Exit" value={kpis.totalNDC} icon={Users} colorClass="text-primary" bgClass="bg-primary/10" />
+        </div>
+        <div onClick={() => setOpenNDCModalOpen(true)} className="cursor-pointer hover:scale-105 transition-transform duration-200">
+          <KPICard title="Open NDC" value={kpis.openNDC} icon={FolderOpen} colorClass="text-orange-600" bgClass="bg-orange-50" />
+        </div>
+        <div onClick={() => setClosedNDCModalOpen(true)} className="cursor-pointer hover:scale-105 transition-transform duration-200">
+          <KPICard title="Closed NDC" value={kpis.closedNDC} icon={CheckCircle} colorClass="text-green-600" bgClass="bg-green-50" />
+        </div>
+        <div onClick={() => setDelayedCasesModalOpen(true)} className="cursor-pointer hover:scale-105 transition-transform duration-200">
+          <KPICard title="Top Delayed Cases" value={kpis.totalDelayed} icon={AlertCircle} colorClass="text-red-600" bgClass="bg-red-50" />
+        </div>
+      </div>
+
+      {/* Row 2: Status KPI cards */}
+      <div id="section-kpi-row2" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div onClick={() => setInProgressModalOpen(true)} className="cursor-pointer hover:scale-105 transition-transform duration-200">
+          <KPICard title="In Progress Cases" value={kpis.inProgress} icon={Clock} colorClass="text-yellow-600" bgClass="bg-yellow-50" />
+        </div>
+        <div onClick={() => setPendingApprovalModalOpen(true)} className="cursor-pointer hover:scale-105 transition-transform duration-200">
+          <KPICard title="Pending Approval" value={kpis.pendingApproval} icon={AlertTriangle} colorClass="text-orange-600" bgClass="bg-orange-50" />
+        </div>
+        <div onClick={() => setOverdueModalOpen(true)} className="cursor-pointer hover:scale-105 transition-transform duration-200">
+          <KPICard title="Overdue" value={kpis.overdue} icon={XCircle} colorClass="text-red-700" bgClass="bg-red-100" />
+        </div>
+        <KPICard
+          title="Avg Completion Time"
+          value={`${kpis.avgCompletionDays} days`}
+          icon={TrendingUp}
+          colorClass="text-purple-600"
+          bgClass="bg-purple-50"
+        />
+      </div>
+
+      <DataModal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={modalData.title} data={modalData.data} />
+
+      {/* Total Employee Exit Count Modal */}
+      <FullScreenModal open={totalExitModalOpen} onClose={() => setTotalExitModalOpen(false)} title="Total Employee Exit">
+        <FullScreenTable data={mockNDCData} title="All Exit Records" />
+      </FullScreenModal>
+
+      {/* Open NDC Modal */}
+      <Dialog open={openNDCModalOpen} onOpenChange={setOpenNDCModalOpen}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>Open NDC Categories</DialogTitle>
+          </DialogHeader>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4">
+            <div
+              onClick={() => {
+                setOpenNDCModalOpen(false);
+                setModalData({ title: "Recovery Pending With Departments", data: mockNDCData.filter((r) => !r.ndcCompletedDate || getOverallStatus(r) !== "Completed").filter((r) => r.recoveryStatus === "Pending") });
+                setModalOpen(true);
+              }}
+              className="cursor-pointer p-6 bg-card border border-border rounded-[4px] hover:bg-muted/50 transition-colors"
+            >
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-sm font-medium text-foreground">Recovery Pending</span>
+                <Building2 className="w-5 h-5 text-orange-600 flex-shrink-0" />
+              </div>
+              <p className="text-xs text-muted-foreground mb-2">(With Department)</p>
+              <p className="text-2xl font-bold text-orange-600">{kpis.recoveryPending}</p>
+            </div>
+            <div
+              onClick={() => {
+                setOpenNDCModalOpen(false);
+                setModalData({ title: "NDC Pending With GCC HR Approval", data: mockNDCData.filter((r) => !r.ndcCompletedDate || getOverallStatus(r) !== "Completed").filter((r) => r.gccHrApprovalStatus === "Pending" || r.gccHrApprovalStatus === "In Progress") });
+                setModalOpen(true);
+              }}
+              className="cursor-pointer p-6 bg-card border border-border rounded-[4px] hover:bg-muted/50 transition-colors"
+            >
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-sm font-medium text-foreground">NDC Pending With</span>
+                <Clock className="w-5 h-5 text-blue-600 flex-shrink-0" />
+              </div>
+              <p className="text-xs text-muted-foreground mb-2">(GCC HR Approval)</p>
+              <p className="text-2xl font-bold text-blue-600">{kpis.ndcPendingGCC}</p>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Closed NDC Modal */}
+      <FullScreenModal open={closedNDCModalOpen} onClose={() => setClosedNDCModalOpen(false)} title="Closed NDC Categories">
+        <div className="flex-1 overflow-auto p-8 flex items-start justify-center">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 w-full max-w-4xl">
+            {[
+              { label: "F&F Completed", key: "Done", count: kpis.closedFnfDone, icon: CheckCircle, color: "text-green-600", iconColor: "text-green-600" },
+              { label: "F&F Open", key: "Open", count: kpis.closedFnfOpen, icon: FolderOpen, color: "text-blue-600", iconColor: "text-blue-600" },
+              { label: "F&F Revision Required", key: "Revision Required", count: kpis.closedFnfRevision, icon: AlertCircle, color: "text-red-600", iconColor: "text-red-600" },
+            ].map(({ label, key, count, icon: Icon, color, iconColor }) => (
+              <div
+                key={key}
+                onClick={() => {
+                  setClosedNDCModalOpen(false);
+                  const closedCases = mockNDCData.filter((r) => r.ndcCompletedDate && getOverallStatus(r) === "Completed");
+                  setModalData({ title: label, data: closedCases.filter((r) => r.fnfStatus === key) });
+                  setModalOpen(true);
+                }}
+                className="cursor-pointer p-8 bg-card border border-border rounded-[4px] hover:bg-muted/50 transition-colors"
+              >
+                <div className="flex items-start justify-between mb-3 gap-3">
+                  <span className="text-base font-semibold text-foreground">{label}</span>
+                  <Icon className={`w-6 h-6 flex-shrink-0 ${iconColor}`} />
+                </div>
+                <p className={`text-4xl font-bold ${color}`}>{count}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </FullScreenModal>
+
+      {/* Top Delayed Cases Modal */}
+      <Dialog open={delayedCasesModalOpen} onOpenChange={setDelayedCasesModalOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Top Delayed Cases</DialogTitle>
+          </DialogHeader>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4">
+            <div
+              onClick={() => { setDelayedCasesModalOpen(false); setNdcDelayedTableOpen(true); }}
+              className="cursor-pointer p-6 bg-card border border-border rounded-[4px] hover:bg-muted/50 transition-colors"
+            >
+              <div className="flex items-start justify-between gap-2 mb-1">
+                <span className="text-sm font-medium text-foreground whitespace-nowrap">NDC Delay Cases</span>
+                <Clock className="w-5 h-5 flex-shrink-0 text-red-600" />
+              </div>
+              <p className="text-xs text-muted-foreground mb-2">(View All Delayed NDC Cases)</p>
+              <p className="text-2xl font-bold text-red-600">{kpis.totalDelayed}</p>
+            </div>
+            <div
+              onClick={() => { setDelayedCasesModalOpen(false); setFnfDelayedTableOpen(true); }}
+              className="cursor-pointer p-6 bg-card border border-border rounded-[4px] hover:bg-muted/50 transition-colors"
+            >
+              <div className="flex items-start justify-between gap-2 mb-1">
+                <span className="text-sm font-medium text-foreground whitespace-nowrap">F&F Delay Cases</span>
+                <AlertCircle className="w-5 h-5 flex-shrink-0 text-orange-600" />
+              </div>
+              <p className="text-xs text-muted-foreground mb-2">(View All Delayed F&F Cases)</p>
+              <p className="text-2xl font-bold text-orange-600">{kpis.fnfDelayed}</p>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* NDC Delayed Table Modal */}
+      <FullScreenModal
+        open={ndcDelayedTableOpen}
+        onClose={() => setNdcDelayedTableOpen(false)}
+        title="NDC Delayed Cases"
+        headerActions={
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => alert("Sending reminder emails...")}
+              className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-[4px] hover:bg-red-700 transition-colors"
+            >
+              <Mail className="w-4 h-4" />
+              Send Reminder Email
+            </button>
+            <button
+              onClick={() => {
+                const allDelayed = mockNDCData.filter((r) => getDelayedDays(r) > 0);
+                exportToExcel(allDelayed, "NDC_Delayed_Cases");
+              }}
+              className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-[4px] hover:bg-primary/90 transition-colors"
+            >
+              <Download className="w-4 h-4" />
+              Export to Excel
+            </button>
+          </div>
+        }
+      >
+        <div className="flex-1 overflow-auto p-6">
+          {(() => {
+            const allDelayed = mockNDCData.filter((r) => getDelayedDays(r) > 0);
+            return (
+              <>
+                <p className="text-sm text-muted-foreground mb-3">{allDelayed.length} delayed records</p>
+                <div className="overflow-x-auto rounded-[4px] border border-border">
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted sticky top-0">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground whitespace-nowrap">Person Number</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground whitespace-nowrap">Name</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground whitespace-nowrap">Department</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground whitespace-nowrap">Last Working Date</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground whitespace-nowrap">Days Delayed</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border bg-card">
+                      {allDelayed.length === 0 ? (
+                        <tr><td colSpan={5} className="px-4 py-6 text-center text-muted-foreground">No delayed records found</td></tr>
+                      ) : allDelayed.sort((a, b) => getDelayedDays(b) - getDelayedDays(a)).map((record) => {
+                        const days = getDelayedDays(record);
+                        const badgeColor = days > 30
+                          ? "bg-red-100 text-red-700"
+                          : days >= 7
+                          ? "bg-amber-100 text-amber-700"
+                          : "bg-yellow-100 text-yellow-700";
+                        return (
+                          <tr key={record.id} className="hover:bg-muted/50">
+                            <td className="px-4 py-3 whitespace-nowrap font-medium">{record.personNumber}</td>
+                            <td className="px-4 py-3 whitespace-nowrap">{record.employeeName}</td>
+                            <td className="px-4 py-3">{record.department}</td>
+                            <td className="px-4 py-3 whitespace-nowrap">{record.lastWorkingDate}</td>
+                            <td className="px-4 py-3 whitespace-nowrap">
+                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${badgeColor}`}>{days} days</span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            );
+          })()}
+        </div>
+      </FullScreenModal>
+
+      {/* F&F Delayed Table Modal */}
+      <FullScreenModal
+        open={fnfDelayedTableOpen}
+        onClose={() => setFnfDelayedTableOpen(false)}
+        title="F&F Delayed Cases"
+        headerActions={
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => alert("Sending reminder emails to all F&F delayed cases...")}
+              className="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-[4px] hover:bg-orange-700 transition-colors"
+            >
+              <Mail className="w-4 h-4" />
+              Send Reminder Email
+            </button>
+            <button
+              onClick={() => {
+                const fnfDelayedData = mockNDCData.filter((r) => {
+                  if (!r.fnfStatus || r.fnfStatus === "Done") return false;
+                  return Math.ceil((new Date().getTime() - new Date(r.lastWorkingDate).getTime()) / (1000 * 60 * 60 * 24)) > 0;
+                });
+                exportToExcel(fnfDelayedData, "FnF_Delayed_Cases");
+              }}
+              className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-[4px] hover:bg-primary/90 transition-colors"
+            >
+              <Download className="w-4 h-4" />
+              Export to Excel
+            </button>
+          </div>
+        }
+      >
+        <div className="flex-1 overflow-auto p-6">
+          <h3 className="text-base font-semibold text-orange-800 mb-3">
+            F&F delayed cases <span className="ml-2 text-sm font-normal text-muted-foreground">({kpis.fnfDelayed} records)</span>
+          </h3>
+          <div className="overflow-x-auto rounded-[4px] border border-orange-200">
+            <table className="w-full text-sm">
+              <thead className="bg-orange-50">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground whitespace-nowrap">Person Number</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground whitespace-nowrap">Name</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground whitespace-nowrap">Department</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground whitespace-nowrap">Last Working Date</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground whitespace-nowrap">F&F Status</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground whitespace-nowrap">Days Delayed</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-orange-100">
+                {mockNDCData.filter((r) => {
+                  if (!r.fnfStatus || r.fnfStatus === "Done") return false;
+                  return Math.ceil((new Date().getTime() - new Date(r.lastWorkingDate).getTime()) / (1000 * 60 * 60 * 24)) > 0;
+                }).length === 0 ? (
+                  <tr><td colSpan={6} className="px-4 py-6 text-center text-muted-foreground">No records found</td></tr>
+                ) : mockNDCData.filter((r) => {
+                  if (!r.fnfStatus || r.fnfStatus === "Done") return false;
+                  return Math.ceil((new Date().getTime() - new Date(r.lastWorkingDate).getTime()) / (1000 * 60 * 60 * 24)) > 0;
+                }).map((record) => {
+                  const delayDays = Math.ceil((new Date().getTime() - new Date(record.lastWorkingDate).getTime()) / (1000 * 60 * 60 * 24));
+                  return (
+                    <tr key={record.id} className="hover:bg-orange-50/50">
+                      <td className="px-4 py-3 whitespace-nowrap font-medium">{record.personNumber}</td>
+                      <td className="px-4 py-3 whitespace-nowrap">{record.employeeName}</td>
+                      <td className="px-4 py-3">{record.department}</td>
+                      <td className="px-4 py-3 whitespace-nowrap">{record.lastWorkingDate}</td>
+                      <td className="px-4 py-3">
+                        <span className="inline-flex items-center px-2 py-1 rounded-[4px] text-xs font-medium bg-orange-100 text-orange-700 whitespace-nowrap">{record.fnfStatus}</span>
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-700">{delayDays} days</span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </FullScreenModal>
+
+      {/* In Progress Modal */}
+      <FullScreenModal open={inProgressModalOpen} onClose={() => setInProgressModalOpen(false)} title="In Progress Cases">
+        <FullScreenTable data={mockNDCData.filter((r) => getOverallStatus(r) === "In Progress")} title="In Progress Cases" />
+      </FullScreenModal>
+
+      {/* Pending Approval Modal */}
+      <FullScreenModal open={pendingApprovalModalOpen} onClose={() => setPendingApprovalModalOpen(false)} title="Pending Approval">
+        <FullScreenTable data={mockNDCData.filter((r) => getOverallStatus(r) === "Pending")} title="Pending Approval Cases" />
+      </FullScreenModal>
+
+      {/* Overdue Modal */}
+      <FullScreenModal open={overdueModalOpen} onClose={() => setOverdueModalOpen(false)} title="Overdue">
+        <FullScreenTable data={mockNDCData.filter(isOverdue)} title="Overdue Cases" />
+      </FullScreenModal>
+
+      <FilterBar
+        departmentFilter=""
+        setDepartmentFilter={() => {}}
+        ndcStageFilter={ndcStageFilter}
+        setNdcStageFilter={setNdcStageFilter}
+        approvalDepartmentFilter={approvalDepartmentFilter}
+        setApprovalDepartmentFilter={setApprovalDepartmentFilter}
+        approvalStatusFilter={approvalStatusFilter}
+        setApprovalStatusFilter={setApprovalStatusFilter}
+        searchQuery={searchQuery}
+        setSearchQuery={setSearchQuery}
+        departments={[]}
+        ndcStages={ndcStages}
+      />
+
+      <div id="section-ndc-table">
+      <NDCTable
+        data={sortedData}
+        currentPage={currentPage}
+        setCurrentPage={setCurrentPage}
+        itemsPerPage={itemsPerPage}
+        onSort={handleSort}
+        getRowHighlight={getRowHighlight}
+        onExport={() => exportToExcel(sortedData, "NDC_Records")}
+      />
+      </div>
+    </div>
+  );
+}
