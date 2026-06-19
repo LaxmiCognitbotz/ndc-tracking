@@ -121,3 +121,54 @@ class IngestResponse(BaseModel):
     records_failed: int
     status: str
     errors: list[str] = []
+
+
+# Dashboard Metrics Schemas
+class OpenNdcCategory(BaseModel):
+    name: str
+    count: int
+
+
+class ClosedNdcCategory(BaseModel):
+    name: str
+    count: int
+
+
+class DelayedCaseCategory(BaseModel):
+    name: str
+    count: int
+    link: str | None = None
+
+
+class DashboardSummary(BaseModel):
+    total_employee_exit_count: int
+    open_ndc: int
+    closed_ndc: int
+    top_delayed_cases: int
+    in_progress_cases: int
+    pending_approval: int
+    overdue: int
+    avg_completion_time_days: float | None
+
+
+class OpenNdcBreakdown(BaseModel):
+    recovery_pending: int
+    ndc_pending_with_gcc: int
+
+
+class ClosedNdcBreakdown(BaseModel):
+    ff_done: int
+    ff_open: int
+    ff_revision_required: int
+
+
+class DelayedCasesBreakdown(BaseModel):
+    ndc_delay_cases: int
+    ff_delay_cases: int
+
+
+class DashboardDetailedMetrics(BaseModel):
+    summary: DashboardSummary
+    open_ndc_breakdown: OpenNdcBreakdown
+    closed_ndc_breakdown: ClosedNdcBreakdown
+    delayed_cases: DelayedCasesBreakdown
