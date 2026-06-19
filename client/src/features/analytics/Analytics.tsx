@@ -1,7 +1,8 @@
 import { useMemo, useState, useEffect } from "react";
-import axios from "axios";
+import axios from "../../lib/axios";
 import { NDCRecord } from "../../types";
 import { PPTDownloadButton } from "../../components/common/PPTDownloadButton";
+import { LoadingScreen } from "../../components/common/LoadingScreen";
 
 import HighchartsReact from "highcharts-react-official";
 import Highcharts from "highcharts";
@@ -28,8 +29,9 @@ export function Analytics() {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    axios.get("/api/v1/ndc-records").then((res) => {
-      setMockNDCData(res.data);
+    axios.get("/api/v1/analytics-records").then((res) => {
+      const data = res.data?.data || res.data;
+      setMockNDCData(Array.isArray(data) ? data : []);
       setIsLoading(false);
     });
   }, []);
@@ -38,17 +40,6 @@ export function Analytics() {
   const [ndcChartApprovalFilter, setNdcChartApprovalFilter] = useState("");
   const [topDelayedFilter, setTopDelayedFilter] = useState<"All" | "NDC" | "F&F">("All");
 
-  const getOverallStatus = (record: NDCRecord) => {
-    const statuses = [
-      record.rmApprovalStatus, record.itApprovalStatus, record.abexApprovalStatus,
-      record.telecomApprovalStatus, record.safetyApprovalStatus, record.administrationApprovalStatus,
-      record.securityApprovalStatus, record.hrApprovalStatus, record.gccHrApprovalStatus, record.finalAbexApprovalStatus,
-    ].filter((s) => s !== "Not Applicable" && s !== "");
-    if (statuses.some((s) => s === "Pending")) return "Pending";
-    if (statuses.some((s) => s === "In Progress")) return "In Progress";
-    if (statuses.every((s) => s === "Completed")) return "Completed";
-    return "In Progress";
-  };
 
   // NDC Status data for Highcharts Pie + Bar
   const ndcChartFilteredData = useMemo(() => {
@@ -106,10 +97,11 @@ export function Analytics() {
 
   // F&F Status Breakdown (moved from FNF Management)
   const fnfStatusBreakdownData = useMemo(() => {
-    const total = mockNDCData.length;
-    const done = mockNDCData.filter((r) => r.fnfStatus === "Done" || r.fnfStatus === "Completed").length;
-    const open = mockNDCData.filter((r) => r.fnfStatus === "Open").length;
-    const revision = mockNDCData.filter((r) => r.fnfStatus === "Revision Required").length;
+    const activeRecords = mockNDCData.filter(r => r.fnfStatus && r.fnfStatus.trim() !== "");
+    const total = activeRecords.length;
+    const done = activeRecords.filter((r) => r.fnfStatus === "Done" || r.fnfStatus === "Completed").length;
+    const open = activeRecords.filter((r) => r.fnfStatus === "Open").length;
+    const revision = activeRecords.filter((r) => r.fnfStatus === "Revision Required").length;
     const notStarted = total - done - open - revision;
     const entries = [
       { name: "Completed", y: done, color: "#10b981" },
@@ -164,7 +156,8 @@ export function Analytics() {
       "More than 30 days": 0,
     };
 
-    mockNDCData.forEach((record) => {
+    const activeRecords = mockNDCData.filter((r) => r.fnfStatus && r.fnfStatus.trim() !== "");
+    activeRecords.forEach((record) => {
       const days = getCompletionDays(record);
       if (days !== null) {
         const abs = Math.abs(days);
@@ -233,8 +226,34 @@ export function Analytics() {
     }));
   }, [mockNDCData]);
 
-  // F&F Closed TAT Analysis — use all records with ndcCompletedDate for richer data
+  // F&F Closed TAT Analysis
   const fnfClosedTATData = useMemo(() => {
+    const cats: Record<string, { count: number; color: string }> = {
+      "Within 7 Days": { count: 0, color: "#10b981" },
+      "Within 15 Days": { count: 0, color: "#f97316" },
+      "Within 30 Days": { count: 0, color: "#f59e0b" },
+      "More than 30 Days": { count: 0, color: "#ef4444" },
+    };
+
+    const activeRecords = mockNDCData.filter((r) => r.fnfStatus && r.fnfStatus.trim() !== "");
+    activeRecords.forEach((record) => {
+      if (!record.ndcCompletedDate || !record.lastWorkingDate) return;
+      const days = Math.ceil(
+        Math.abs(
+          new Date(record.ndcCompletedDate).getTime() - new Date(record.lastWorkingDate).getTime()
+        ) / (1000 * 60 * 60 * 24)
+      );
+      if (days <= 7) cats["Within 7 Days"].count++;
+      else if (days <= 15) cats["Within 15 Days"].count++;
+      else if (days <= 30) cats["Within 30 Days"].count++;
+      else cats["More than 30 Days"].count++;
+    });
+
+    return Object.entries(cats).map(([name, { count, color }]) => ({ name, count, color }));
+  }, [mockNDCData]);
+
+  // NDC Closed TAT Analysis (previously named fnfClosedTATData)
+  const ndcClosedTATData = useMemo(() => {
     const cats: Record<string, { count: number; color: string }> = {
       "Within 7 Days": { count: 0, color: "#10b981" },
       "Within 15 Days": { count: 0, color: "#f97316" },
@@ -375,7 +394,7 @@ export function Analytics() {
     { id: "section-delayed", title: "Top Delayed Cases" },
   ];
 
-  if (isLoading) return <div className="p-8 text-center">Loading...</div>;
+  if (isLoading) return <LoadingScreen />;
 
   const handleDownloadPPT = async () => {
     const { createPPT, addImageSlide } = await import("../../utils/pptExport");
@@ -651,7 +670,7 @@ export function Analytics() {
       <div className="bg-card rounded-[4px] p-6 border border-border" id="section-ndc-tat">
         <h3 className="text-lg font-bold mb-4">NDC Closed TAT Analysis</h3>
         <ResponsiveContainer width="100%" height={320}>
-          <LineChart data={fnfClosedTATData} margin={{ top: 20, right: 40, left: 20, bottom: 40 }}>
+          <LineChart data={ndcClosedTATData} margin={{ top: 20, right: 40, left: 20, bottom: 40 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
             <XAxis
               dataKey="name"
@@ -675,7 +694,7 @@ export function Analytics() {
               animationDuration={1000}
               dot={(props: any) => {
                 const { cx, cy, index } = props;
-                const color = fnfClosedTATData[index]?.color || "#1e5a8e";
+                const color = ndcClosedTATData[index]?.color || "#1e5a8e";
                 return <circle key={index} cx={cx} cy={cy} r={6} fill={color} stroke="white" strokeWidth={2} />;
               }}
               stroke="#1e5a8e"

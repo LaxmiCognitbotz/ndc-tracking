@@ -1,6 +1,18 @@
 import { useState, useEffect } from "react";
-import axios from "axios";
+import axios from "../../lib/axios";
 import { Mail, Plus, Trash2, Save } from "lucide-react";
+import { LoadingScreen } from "../../components/common/LoadingScreen";
+import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "../../components/ui/alert-dialog";
 
 interface EmailRecipient {
   id: string;
@@ -21,8 +33,9 @@ export function EmailConfig() {
   }, []);
 
   const fetchData = () => {
-    axios.get("/api/v1/email-recipients").then(res => {
-      setRecipients(res.data);
+    axios.get("/api/v1/email-recipients").then((res) => {
+      const data = res.data?.data || res.data;
+      setRecipients(Array.isArray(data) ? data : []);
       setIsLoading(false);
     });
   };
@@ -34,6 +47,7 @@ export function EmailConfig() {
     role: "",
   });
   const [isAdding, setIsAdding] = useState(false);
+  const [recipientToDelete, setRecipientToDelete] = useState<string | null>(null);
 
   const handleAddRecipient = () => {
     if (newRecipient.name && newRecipient.email && newRecipient.department) {
@@ -41,18 +55,27 @@ export function EmailConfig() {
         fetchData();
         setNewRecipient({ name: "", email: "", department: "", role: "" });
         setIsAdding(false);
+        toast.success("Recipient added successfully");
       });
     }
   };
 
   const handleRemoveRecipient = (id: string) => {
-    if (confirm("Are you sure you want to remove this recipient?")) {
-      axios.delete(`/api/v1/email-recipients/${id}`).then(() => fetchData());
+    setRecipientToDelete(id);
+  };
+
+  const confirmRemoveRecipient = () => {
+    if (recipientToDelete) {
+      axios.delete(`/api/v1/email-recipients/${recipientToDelete}`).then(() => {
+        fetchData();
+        setRecipientToDelete(null);
+        toast.success("Recipient removed successfully");
+      });
     }
   };
 
   const handleSave = () => {
-    alert("Email configuration saved successfully!");
+    toast.success("Email configuration saved successfully!");
     // Implementation would save to backend/database
   };
 
@@ -69,7 +92,7 @@ export function EmailConfig() {
     "GCC HR",
   ];
 
-  if (isLoading) return <div className="p-8 text-center">Loading...</div>;
+  if (isLoading) return <LoadingScreen />;
 
   return (
     <div className="p-8 space-y-6">
@@ -240,6 +263,22 @@ export function EmailConfig() {
           Save Configuration
         </button>
       </div>
+      <AlertDialog open={!!recipientToDelete} onOpenChange={(open) => !open && setRecipientToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently remove the email recipient from the configuration.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmRemoveRecipient} className="bg-red-600 text-white hover:bg-red-700">
+              Remove
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -13,7 +13,7 @@ interface NDCTableProps {
   itemsPerPage: number;
   onSort: (column: keyof NDCRecord) => void;
   getRowHighlight: (record: NDCRecord) => string;
-  onExport: () => void;
+  onExport: (visibleColumns: {key: string, label: string}[]) => void;
 }
 
 const allColumns = [
@@ -142,7 +142,7 @@ export function NDCTable({
             </PopoverContent>
           </Popover>
           <button
-            onClick={onExport}
+            onClick={() => onExport(visibleColumns)}
             className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-[4px] hover:bg-primary/90 transition-colors"
           >
             <Download className="w-4 h-4" />

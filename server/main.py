@@ -42,6 +42,11 @@ app.include_router(ndc.router)
 app.include_router(analytics.router)
 app.include_router(export.router)
 
+from app.routers import frontend_api, email_api
+app.include_router(frontend_api.router)
+app.include_router(email_api.router)
+
+
 
 @app.get("/health")
 async def health():

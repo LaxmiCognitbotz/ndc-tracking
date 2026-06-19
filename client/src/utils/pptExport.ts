@@ -1,5 +1,6 @@
 import PptxGenJS from "pptxgenjs";
 import { toPng } from "html-to-image";
+import { toast } from "sonner";
 
 export const createPPT = (title: string) => {
   const pptx = new PptxGenJS();
@@ -90,7 +91,7 @@ export const addImageSlide = async (pptx: PptxGenJS, title: string, elementId: s
 
   try {
     const dataUrl = await toPng(el, { 
-      pixelRatio: 1.5, 
+      pixelRatio: 3, 
       backgroundColor: "#ffffff",
       skipFonts: false
     });
@@ -105,7 +106,7 @@ export const addImageSlide = async (pptx: PptxGenJS, title: string, elementId: s
     });
   } catch (err: any) {
     console.error("Error capturing element:", err);
-    alert(`Error capturing screenshot for ${title}: ` + (err.message || err.toString()));
+    toast.error(`Error capturing screenshot for ${title}: ` + (err.message || err.toString()));
     slide.addText("Content could not be captured.", { x: 0.5, y: 2.0, w: "90%", h: 0.5, fontSize: 12, color: "666666" });
   }
 };

@@ -1,14 +1,16 @@
 import { useState, useMemo, useEffect } from "react";
 import { NDCRecord } from "../../types";
-import axios from "axios";
+import axios from "../../lib/axios";
 import { exportToExcel } from "../../utils/excelExport";
 import { createPPT, addImageSlide } from "../../utils/pptExport";
 import { PPTDownloadButton } from "../../components/common/PPTDownloadButton";
+import { toast } from "sonner";
 import { KPICard } from "../../components/common/KPICard";
 import { FilterBar } from "./components/FilterBar";
 import { DataModal } from "../../components/common/DataModal";
 import { NDCTable } from "../../components/common/NDCTable";
 import { FullScreenModal } from "../../components/common/FullScreenModal";
+import { LoadingScreen } from "../../components/common/LoadingScreen";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../../components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "../../components/ui/popover";
 import { Calendar } from "../../components/ui/calendar";
@@ -37,7 +39,8 @@ export function Overview() {
 
   useEffect(() => {
     axios.get("/api/v1/ndc-records").then((res) => {
-      setMockNDCData(res.data);
+      const data = res.data?.data || res.data;
+      setMockNDCData(Array.isArray(data) ? data : []);
       setIsLoading(false);
     });
   }, []);
@@ -225,7 +228,16 @@ export function Overview() {
       <div className="p-4 border-b border-border flex items-center justify-between shrink-0">
         <h3 className="font-semibold text-foreground">{title} ({data.length})</h3>
         <button
-          onClick={() => exportToExcel(data, title || "Export")}
+          onClick={() => {
+            const mappedData = data.map(r => ({
+              "Person No.": r.personNumber,
+              "Name": r.employeeName,
+              "Department": r.department,
+              "Last Working Date": r.lastWorkingDate,
+              "NDC Stage": r.ndcStage
+            }));
+            exportToExcel(mappedData, title || "Export");
+          }}
           className="flex items-center gap-2 px-3 py-1.5 bg-primary text-primary-foreground rounded-[4px] hover:bg-primary/90 transition-colors text-sm"
         >
           <Download className="w-3 h-3" />
@@ -262,12 +274,11 @@ export function Overview() {
     </div>
   );
 
-  if (isLoading) return <div className="p-8 text-center">Loading...</div>;
+  if (isLoading) return <LoadingScreen />;
 
   const handleDownloadPPT = async () => {
     const pptx = createPPT("Overview Dashboard");
-    await addImageSlide(pptx, "KPI Summary", "section-kpi-row1");
-    await addImageSlide(pptx, "Status KPIs", "section-kpi-row2");
+    await addImageSlide(pptx, "KPI Summary", "section-kpi-all");
     
     // const headers = ["Person Number", "Name", "Department", "Last Working Date", "NDC Stage", "Status"];
     // const rows = sortedData.map(r => [
@@ -304,7 +315,7 @@ export function Overview() {
             </PopoverContent>
           </Popover>
           <button
-            onClick={() => alert("Syncing data from OpenText...")}
+            onClick={() => toast.info("Syncing data from OpenText...")}
             className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-[4px] hover:bg-primary/90 transition-colors"
           >
             <RefreshCw className="w-4 h-4" />
@@ -313,7 +324,9 @@ export function Overview() {
         </div>
       </div>
 
-      {/* Row 1: Main KPI cards */}
+      {/* All KPIs wrapper for PPT export */}
+      <div id="section-kpi-all" className="space-y-6">
+        {/* Row 1: Main KPI cards */}
       <div id="section-kpi-row1" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <div onClick={() => setTotalExitModalOpen(true)} className="cursor-pointer hover:scale-105 transition-transform duration-200">
           <KPICard title="Total Employee Exit" value={kpis.totalNDC} icon={Users} colorClass="text-primary" bgClass="bg-primary/10" />
@@ -347,6 +360,7 @@ export function Overview() {
           colorClass="text-purple-600"
           bgClass="bg-purple-50"
         />
+      </div>
       </div>
 
       <DataModal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={modalData.title} data={modalData.data} />
@@ -398,38 +412,43 @@ export function Overview() {
       </Dialog>
 
       {/* Closed NDC Modal */}
-      <FullScreenModal open={closedNDCModalOpen} onClose={() => setClosedNDCModalOpen(false)} title="Closed NDC Categories">
-        <div className="flex-1 overflow-auto p-8 flex items-start justify-center">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 w-full max-w-4xl">
-            {[
-              { label: "F&F Completed", key: "Done", count: kpis.closedFnfDone, icon: CheckCircle, color: "text-green-600", iconColor: "text-green-600" },
-              { label: "F&F Open", key: "Open", count: kpis.closedFnfOpen, icon: FolderOpen, color: "text-blue-600", iconColor: "text-blue-600" },
-              { label: "F&F Revision Required", key: "Revision Required", count: kpis.closedFnfRevision, icon: AlertCircle, color: "text-red-600", iconColor: "text-red-600" },
-            ].map(({ label, key, count, icon: Icon, color, iconColor }) => (
-              <div
-                key={key}
-                onClick={() => {
-                  setClosedNDCModalOpen(false);
-                  const closedCases = mockNDCData.filter((r) => r.ndcCompletedDate && getOverallStatus(r) === "Completed");
-                  setModalData({ title: label, data: closedCases.filter((r) => r.fnfStatus === key) });
-                  setModalOpen(true);
-                }}
-                className="cursor-pointer p-8 bg-card border border-border rounded-[4px] hover:bg-muted/50 transition-colors"
-              >
-                <div className="flex items-start justify-between mb-3 gap-3">
-                  <span className="text-base font-semibold text-foreground">{label}</span>
-                  <Icon className={`w-6 h-6 flex-shrink-0 ${iconColor}`} />
+      <Dialog open={closedNDCModalOpen} onOpenChange={setClosedNDCModalOpen}>
+        <DialogContent className="max-w-4xl sm:max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>Closed NDC Categories</DialogTitle>
+          </DialogHeader>
+          <div className="p-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+              {[
+                { label: "F&F Completed", key: "Done", count: kpis.closedFnfDone, icon: CheckCircle, color: "text-green-600", iconColor: "text-green-600" },
+                { label: "F&F Open", key: "Open", count: kpis.closedFnfOpen, icon: FolderOpen, color: "text-blue-600", iconColor: "text-blue-600" },
+                { label: "F&F Revision Required", key: "Revision Required", count: kpis.closedFnfRevision, icon: AlertCircle, color: "text-red-600", iconColor: "text-red-600" },
+              ].map(({ label, key, count, icon: Icon, color, iconColor }) => (
+                <div
+                  key={key}
+                  onClick={() => {
+                    setClosedNDCModalOpen(false);
+                    const closedCases = mockNDCData.filter((r) => r.ndcCompletedDate && getOverallStatus(r) === "Completed");
+                    setModalData({ title: label, data: closedCases.filter((r) => r.fnfStatus === key) });
+                    setModalOpen(true);
+                  }}
+                  className="cursor-pointer p-6 bg-card border border-border rounded-[4px] hover:bg-muted/50 transition-colors"
+                >
+                  <div className="flex items-start justify-between mb-3 gap-2">
+                    <span className="text-sm font-semibold text-foreground leading-tight">{label}</span>
+                    <Icon className={`w-5 h-5 flex-shrink-0 ${iconColor}`} />
+                  </div>
+                  <p className={`text-4xl font-bold ${color}`}>{count}</p>
                 </div>
-                <p className={`text-4xl font-bold ${color}`}>{count}</p>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-        </div>
-      </FullScreenModal>
+        </DialogContent>
+      </Dialog>
 
       {/* Top Delayed Cases Modal */}
       <Dialog open={delayedCasesModalOpen} onOpenChange={setDelayedCasesModalOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>Top Delayed Cases</DialogTitle>
           </DialogHeader>
@@ -468,8 +487,8 @@ export function Overview() {
         headerActions={
           <div className="flex items-center gap-3">
             <button
-              onClick={() => alert("Sending reminder emails...")}
-              className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-[4px] hover:bg-red-700 transition-colors"
+              onClick={() => toast.info("Sending reminder emails...")}
+              className="flex items-center gap-2 px-3 py-1.5 bg-primary text-primary-foreground text-sm rounded-[4px] hover:bg-primary/90 transition-colors"
             >
               <Mail className="w-4 h-4" />
               Send Reminder Email
@@ -477,7 +496,14 @@ export function Overview() {
             <button
               onClick={() => {
                 const allDelayed = mockNDCData.filter((r) => getDelayedDays(r) > 0);
-                exportToExcel(allDelayed, "NDC_Delayed_Cases");
+                const mappedData = allDelayed.map(r => ({
+                  "Person Number": r.personNumber,
+                  "Name": r.employeeName,
+                  "Department": r.department,
+                  "Last Working Date": r.lastWorkingDate,
+                  "Days Delayed": getDelayedDays(r)
+                }));
+                exportToExcel(mappedData, "NDC_Delayed_Cases");
               }}
               className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-[4px] hover:bg-primary/90 transition-colors"
             >
@@ -543,8 +569,8 @@ export function Overview() {
         headerActions={
           <div className="flex items-center gap-3">
             <button
-              onClick={() => alert("Sending reminder emails to all F&F delayed cases...")}
-              className="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-[4px] hover:bg-orange-700 transition-colors"
+              onClick={() => toast.info("Sending reminder emails to all F&F delayed cases...")}
+              className="flex items-center gap-2 px-3 py-1.5 bg-primary text-primary-foreground text-sm rounded-[4px] hover:bg-primary/90 transition-colors"
             >
               <Mail className="w-4 h-4" />
               Send Reminder Email
@@ -555,7 +581,15 @@ export function Overview() {
                   if (!r.fnfStatus || r.fnfStatus === "Done") return false;
                   return Math.ceil((new Date().getTime() - new Date(r.lastWorkingDate).getTime()) / (1000 * 60 * 60 * 24)) > 0;
                 });
-                exportToExcel(fnfDelayedData, "FnF_Delayed_Cases");
+                const mappedData = fnfDelayedData.map(r => ({
+                  "Person Number": r.personNumber,
+                  "Name": r.employeeName,
+                  "Department": r.department,
+                  "Last Working Date": r.lastWorkingDate,
+                  "F&F Status": r.fnfStatus,
+                  "Days Delayed": Math.ceil((new Date().getTime() - new Date(r.lastWorkingDate).getTime()) / (1000 * 60 * 60 * 24))
+                }));
+                exportToExcel(mappedData, "FnF_Delayed_Cases");
               }}
               className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-[4px] hover:bg-primary/90 transition-colors"
             >
@@ -651,7 +685,25 @@ export function Overview() {
         itemsPerPage={itemsPerPage}
         onSort={handleSort}
         getRowHighlight={getRowHighlight}
-        onExport={() => exportToExcel(sortedData, "NDC_Records")}
+        onExport={(visibleColumns) => {
+          const mappedData = sortedData.map(r => {
+            const obj: any = {};
+            visibleColumns.forEach(col => {
+              let value = r[col.key as keyof NDCRecord];
+              if (col.key.includes("ApprovalStatus")) {
+                if (value === "PENDING") value = "Pending";
+                else if (value === "IN_PROGRESS") value = "In Progress";
+                else if (value === "COMPLETED") value = "Completed";
+                else if (value === "NOT_APPLICABLE") value = "Not Applicable";
+                else if (value) value = value.toString().charAt(0).toUpperCase() + value.toString().slice(1).toLowerCase();
+                else value = "Not Applicable";
+              }
+              obj[col.label] = value;
+            });
+            return obj;
+          });
+          exportToExcel(mappedData, "NDC_Records");
+        }}
       />
       </div>
     </div>

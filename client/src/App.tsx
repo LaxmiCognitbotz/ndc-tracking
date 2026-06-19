@@ -27,12 +27,18 @@ function AppContent() {
   );
 }
 
+import { Toaster } from "sonner";
+import { GlobalErrorBoundary } from "./components/common/GlobalErrorBoundary";
+
 export default function App() {
   return (
-    <BrowserRouter>
-      <SidebarProvider>
-        <AppContent />
-      </SidebarProvider>
-    </BrowserRouter>
+    <GlobalErrorBoundary>
+      <BrowserRouter>
+        <SidebarProvider>
+          <AppContent />
+          <Toaster position="bottom-right" richColors />
+        </SidebarProvider>
+      </BrowserRouter>
+    </GlobalErrorBoundary>
   );
 }

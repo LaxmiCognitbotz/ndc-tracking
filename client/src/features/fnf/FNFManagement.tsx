@@ -1,11 +1,13 @@
 import { useState, useMemo, useEffect } from "react";
-import axios from "axios";
+import axios from "../../lib/axios";
 import { NDCRecord } from "../../types";
 import { exportToExcel } from "../../utils/excelExport";
 import { PPTDownloadButton } from "../../components/common/PPTDownloadButton";
 import { FullScreenModal } from "../../components/common/FullScreenModal";
+import { LoadingScreen } from "../../components/common/LoadingScreen";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../../components/ui/dialog";
 import { FileText, Download, Filter, CheckCircle, XCircle, Clock, Send, CheckSquare, Mail, TrendingUp } from "lucide-react";
+import { toast } from "sonner";
 
 export function FNFManagement() {
   const [mockNDCData, setMockNDCData] = useState<NDCRecord[]>([]);
@@ -16,8 +18,9 @@ export function FNFManagement() {
   }, []);
 
   const fetchData = () => {
-    axios.get("/api/v1/ndc-records").then((res) => {
-      setMockNDCData(res.data);
+    axios.get("/api/v1/fnf-records").then((res) => {
+      const data = res.data?.data || res.data;
+      setMockNDCData(Array.isArray(data) ? data : []);
       setIsLoading(false);
     });
   };
@@ -34,7 +37,8 @@ export function FNFManagement() {
   const [mailEmailTo, setMailEmailTo] = useState("");
 
   const filteredData = useMemo(() => {
-    let filtered = mockNDCData;
+    const activeRecords = mockNDCData.filter(r => r.fnfStatus && r.fnfStatus.trim() !== "");
+    let filtered = activeRecords;
     if (statusFilter) filtered = filtered.filter((r) => r.fnfStatus === statusFilter);
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
@@ -46,13 +50,14 @@ export function FNFManagement() {
   }, [mockNDCData, statusFilter, searchQuery]);
 
   const fnfStats = useMemo(() => {
-    const total = mockNDCData.length;
-    const done = mockNDCData.filter((r) => r.fnfStatus === "Done" || r.fnfStatus === "Completed").length;
-    const open = mockNDCData.filter((r) => r.fnfStatus === "Open").length;
-    const revision = mockNDCData.filter((r) => r.fnfStatus === "Revision Required").length;
-    const closed = mockNDCData.filter((r) => r.ndcCompletedDate).length;
+    const activeRecords = mockNDCData.filter(r => r.fnfStatus && r.fnfStatus.trim() !== "");
+    const total = activeRecords.length;
+    const done = activeRecords.filter((r) => r.fnfStatus === "Done" || r.fnfStatus === "Completed").length;
+    const open = activeRecords.filter((r) => r.fnfStatus === "Open").length;
+    const revision = activeRecords.filter((r) => r.fnfStatus === "Revision Required").length;
+    const closed = activeRecords.filter((r) => r.ndcCompletedDate).length;
 
-    const closedRecords = mockNDCData.filter((r) => r.ndcCompletedDate && r.lastWorkingDate);
+    const closedRecords = activeRecords.filter((r) => r.ndcCompletedDate && r.lastWorkingDate);
     const avgTAT = closedRecords.length > 0
       ? Math.round(
           closedRecords.reduce((sum, r) => {
@@ -72,7 +77,7 @@ export function FNFManagement() {
       fnfStatus: newStatus
     }).then(() => {
       fetchData();
-      alert(`F&F status updated to ${newStatus} for ${record.employeeName} (${record.personNumber})`);
+      toast.success(`F&F status updated to ${newStatus} for ${record.employeeName} (${record.personNumber})`);
     });
     setActionDialogOpen(false);
     setSelectedRecord(null);
@@ -80,20 +85,21 @@ export function FNFManagement() {
 
   const handleDocumentView = (record: NDCRecord) => {
     if (record.fnfDocument) {
-      alert(`Opening document: ${record.fnfDocument}`);
+      toast.info(`Opening document: ${record.fnfDocument}`);
     } else {
-      alert("No document available for this employee");
+      toast.error("No document available for this employee");
     }
   };
 
   const handleKPIClick = (type: "total" | "done" | "open" | "revision" | "closed" | "avgTAT") => {
+    const activeRecords = mockNDCData.filter(r => r.fnfStatus && r.fnfStatus.trim() !== "");
     const map: Record<string, { title: string; data: NDCRecord[] }> = {
-      total: { title: "Total F&F In Process", data: mockNDCData },
-      done: { title: "F&F Completed", data: mockNDCData.filter((r) => r.fnfStatus === "Done" || r.fnfStatus === "Completed") },
-      open: { title: "F&F Open", data: mockNDCData.filter((r) => r.fnfStatus === "Open") },
-      revision: { title: "Revision Required", data: mockNDCData.filter((r) => r.fnfStatus === "Revision Required") },
-      closed: { title: "F&F Closed", data: mockNDCData.filter((r) => r.ndcCompletedDate) },
-      avgTAT: { title: "F&F TAT Records", data: mockNDCData.filter((r) => r.ndcCompletedDate && r.lastWorkingDate) },
+      total: { title: "Total F&F In Process", data: activeRecords },
+      done: { title: "F&F Completed", data: activeRecords.filter((r) => r.fnfStatus === "Done" || r.fnfStatus === "Completed") },
+      open: { title: "F&F Open", data: activeRecords.filter((r) => r.fnfStatus === "Open") },
+      revision: { title: "Revision Required", data: activeRecords.filter((r) => r.fnfStatus === "Revision Required") },
+      closed: { title: "F&F Closed", data: activeRecords.filter((r) => r.ndcCompletedDate) },
+      avgTAT: { title: "F&F TAT Records", data: activeRecords.filter((r) => r.ndcCompletedDate && r.lastWorkingDate) },
     };
     setKpiModalData(map[type]);
     setKpiModalOpen(true);
@@ -128,7 +134,7 @@ export function FNFManagement() {
     { type: "avgTAT" as const, label: "F&F TAT (In Days)", value: fnfStats.avgTAT, icon: TrendingUp, color: "text-purple-600" },
   ];
 
-  if (isLoading) return <div className="p-8 text-center">Loading...</div>;
+  if (isLoading) return <LoadingScreen />;
 
   const handleDownloadPPT = async () => {
     const { createPPT, addImageSlide } = await import("../../utils/pptExport");
@@ -218,7 +224,16 @@ export function FNFManagement() {
         <div className="p-6 border-b border-border flex items-center justify-between">
           <h2 className="text-xl font-bold">F&amp;F Records Table</h2>
           <button
-            onClick={() => exportToExcel(filteredData, "FNF_Records")}
+            onClick={() => {
+              const mappedData = filteredData.map(r => ({
+                "Person number": r.personNumber,
+                "Employee name": r.employeeName,
+                "Department": r.department,
+                "Last working date": r.lastWorkingDate,
+                "F&F status": r.fnfStatus
+              }));
+              exportToExcel(mappedData, "FNF_Records");
+            }}
             className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-[4px] hover:bg-primary/90 transition-colors"
           >
             <Download className="w-4 h-4" />
@@ -290,7 +305,17 @@ export function FNFManagement() {
         title={kpiModalData.title}
         headerActions={
           <button
-            onClick={() => exportToExcel(kpiModalData.data, kpiModalData.title || "KPI_Records")}
+            onClick={() => {
+              const mappedData = kpiModalData.data.map(r => ({
+                "Person number": r.personNumber,
+                "Name": r.employeeName,
+                "Department": r.department,
+                "Last working date": r.lastWorkingDate,
+                "NDC stage": r.ndcStage,
+                "F&F status": r.fnfStatus
+              }));
+              exportToExcel(mappedData, kpiModalData.title || "KPI_Records");
+            }}
             className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-[4px] hover:bg-primary/90 transition-colors"
           >
             <Download className="w-4 h-4" />
@@ -402,8 +427,8 @@ export function FNFManagement() {
             <div className="flex gap-3">
               <button
                 onClick={() => {
-                  if (!mailEmailTo) { alert("Please enter an email address"); return; }
-                  alert(`Email sent to ${mailEmailTo}`);
+                  if (!mailEmailTo) { toast.error("Please enter an email address"); return; }
+                  toast.success(`Email sent to ${mailEmailTo}`);
                   setMailDialogOpen(false);
                   setMailRecord(null);
                   setMailEmailTo("");
