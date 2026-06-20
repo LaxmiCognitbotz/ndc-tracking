@@ -13,6 +13,7 @@ from app.schemas.filters import NdcFilterParams
 from app.schemas.ndc import (
     NdcRecordResponse, NdcDetailResponse, NdcApprovalResponse,
     PaginatedResponse, NdcSummaryResponse, StageSummary, BottleneckItem,
+    FilterOptionsResponse,
 )
 from app.auth.jwt_bearer import get_current_user
 from app.utils.date_utils import pending_days, tat_days, days_to_lwd
@@ -195,6 +196,33 @@ async def get_summary(
     )
     total_pending = pending_q.scalar() or 0
 
+    # In-progress cases
+    in_progress_q = await db.execute(
+        select(func.count()).select_from(NdcRecord)
+        .where(NdcRecord.ndc_stage.in_(["Recovery Pending", "GCC Pending"]))
+    )
+    in_progress_count = in_progress_q.scalar() or 0
+
+    # Overdue cases: NDC not completed AND past last working date
+    today = date.today()
+    overdue_q = await db.execute(
+        select(func.count()).select_from(NdcRecord)
+        .where(
+            NdcRecord.ndc_stage != "NDC Completed",
+            NdcRecord.last_working_date < today,
+        )
+    )
+    overdue_count = overdue_q.scalar() or 0
+
+    # Avg completion days for completed records
+    avg_q = await db.execute(
+        select(
+            func.avg(NdcRecord.ndc_completed_date - NdcRecord.ndc_initiated_date)
+        ).where(NdcRecord.ndc_stage == "NDC Completed")
+    )
+    avg_val = avg_q.scalar()
+    avg_completion_days = round(float(avg_val), 1) if avg_val is not None else None
+
     gcc_q = await db.execute(
         select(func.count(distinct(NdcApproval.ndc_record_id)))
         .where(
@@ -208,6 +236,9 @@ async def get_summary(
         total_records=total,
         stage_counts=stage_counts,
         total_pending=total_pending,
+        in_progress_count=in_progress_count,
+        overdue_count=overdue_count,
+        avg_completion_days=avg_completion_days,
         gcc_pending_count=gcc_pending,
     )
 
@@ -225,3 +256,61 @@ async def pending_bottlenecks(
         .order_by(func.count().desc())
     )
     return [BottleneckItem(stage_name=r.stage_name, pending_count=r.pending_count) for r in q.all()]
+
+
+@router.get("/filter-options", response_model=FilterOptionsResponse)
+async def get_filter_options(
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    """Return distinct values for all filter dropdowns on the dashboard."""
+    dept_q = await db.execute(
+        select(distinct(NdcRecord.department_reporting_name))
+        .where(NdcRecord.department_reporting_name.isnot(None))
+        .order_by(NdcRecord.department_reporting_name)
+    )
+    departments = [r[0] for r in dept_q.all()]
+
+    stage_q = await db.execute(
+        select(distinct(NdcRecord.ndc_stage))
+        .where(NdcRecord.ndc_stage.isnot(None))
+        .order_by(NdcRecord.ndc_stage)
+    )
+    ndc_stages = [r[0] for r in stage_q.all()]
+
+    bu_q = await db.execute(
+        select(distinct(NdcRecord.business_unit))
+        .where(NdcRecord.business_unit.isnot(None))
+        .order_by(NdcRecord.business_unit)
+    )
+    business_units = [r[0] for r in bu_q.all()]
+
+    loc_q = await db.execute(
+        select(distinct(NdcRecord.location_city))
+        .where(NdcRecord.location_city.isnot(None))
+        .order_by(NdcRecord.location_city)
+    )
+    locations = [r[0] for r in loc_q.all()]
+
+    approval_stage_q = await db.execute(
+        select(distinct(NdcApproval.stage_name))
+        .where(NdcApproval.stage_name.isnot(None))
+        .order_by(NdcApproval.stage_name)
+    )
+    approval_stages = [r[0] for r in approval_stage_q.all()]
+
+    approval_status_q = await db.execute(
+        select(distinct(NdcApproval.status))
+        .where(NdcApproval.status.isnot(None))
+        .order_by(NdcApproval.status)
+    )
+    approval_statuses = [r[0] for r in approval_status_q.all()]
+
+    return FilterOptionsResponse(
+        departments=departments,
+        ndc_stages=ndc_stages,
+        business_units=business_units,
+        locations=locations,
+        approval_stages=approval_stages,
+        approval_statuses=approval_statuses,
+    )

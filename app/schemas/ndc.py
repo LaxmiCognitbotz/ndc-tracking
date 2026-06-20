@@ -61,6 +61,9 @@ class NdcSummaryResponse(BaseModel):
     total_records: int
     stage_counts: list[StageSummary]
     total_pending: int
+    in_progress_count: int = 0
+    overdue_count: int = 0
+    avg_completion_days: float | None = None
     gcc_pending_count: int
 
 
@@ -102,6 +105,53 @@ class TrendPoint(BaseModel):
     completed: int
 
 
+class MonthlyTrendPoint(BaseModel):
+    month: str
+    initiated: int
+    completed: int
+    initiated_pct: float
+    completed_pct: float
+
+
+class PieChartResponse(BaseModel):
+    completed: int
+    pending: int
+    in_progress: int
+    total: int
+
+
+class NdcAnalysisResponse(BaseModel):
+    on_due_date: int
+    within_2_days: int
+    three_to_seven_days: int
+    seven_to_thirty_days: int
+    more_than_thirty_days: int
+    total: int
+
+
+class ClosedTatAnalysisResponse(BaseModel):
+    within_7_days: int
+    within_15_days: int
+    within_30_days: int
+    more_than_30_days: int
+    total: int
+
+
+class DelayedCase(BaseModel):
+    person_number: int
+    employee_name: str
+    department: str | None
+    last_working_date: date
+    category: str
+    delay_days: int
+
+
+class ApprovalStageAnalysis(BaseModel):
+    stage_name: str
+    completed: int
+    pending: int
+
+
 class BatchResponse(BaseModel):
     id: int
     file_name: str | None = None
@@ -121,3 +171,12 @@ class IngestResponse(BaseModel):
     records_failed: int
     status: str
     errors: list[str] = []
+
+
+class FilterOptionsResponse(BaseModel):
+    departments: list[str] = []
+    ndc_stages: list[str] = []
+    business_units: list[str] = []
+    locations: list[str] = []
+    approval_stages: list[str] = []
+    approval_statuses: list[str] = []
