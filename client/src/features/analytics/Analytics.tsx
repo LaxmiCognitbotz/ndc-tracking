@@ -3,6 +3,8 @@ import axios from "../../lib/axios";
 import { NDCRecord } from "../../types";
 import { PPTDownloadButton } from "../../components/common/PPTDownloadButton";
 import { LoadingScreen } from "../../components/common/LoadingScreen";
+import { exportToExcel } from "../../utils/excelExport";
+import { Download } from "lucide-react";
 
 import HighchartsReact from "highcharts-react-official";
 import Highcharts from "highcharts";
@@ -721,20 +723,39 @@ export function Analytics() {
       <div className="bg-card rounded-[4px] p-6 border border-border" id="section-delayed">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-bold">Top Delayed Cases (F&amp;F Pending, NDC Pending Cases)</h3>
-          <div className="flex items-center gap-1 bg-muted rounded-[4px] p-1">
-            {(["All", "NDC", "F&F"] as const).map((opt) => (
-              <button
-                key={opt}
-                onClick={() => setTopDelayedFilter(opt)}
-                className={`px-3 py-1.5 rounded-[4px] text-sm font-medium transition-colors ${
-                  topDelayedFilter === opt
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                {opt}
-              </button>
-            ))}
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1 bg-muted rounded-[4px] p-1">
+              {(["All", "NDC", "F&F"] as const).map((opt) => (
+                <button
+                  key={opt}
+                  onClick={() => setTopDelayedFilter(opt)}
+                  className={`px-3 py-1.5 rounded-[4px] text-sm font-medium transition-colors ${
+                    topDelayedFilter === opt
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {opt}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => {
+                const mappedData = topDelayedCases.map(r => ({
+                  "Person Number": r.personNumber,
+                  "Employee Name": r.employeeName,
+                  "Department": r.department,
+                  "Last Working Date": r.lastWorkingDate,
+                  "Category": r.category,
+                  "Delay (Days)": r.delayDays
+                }));
+                exportToExcel(mappedData, `Top_Delayed_Cases_${topDelayedFilter.replace("&", "n")}`);
+              }}
+              className="flex items-center gap-2 px-3 py-1.5 bg-primary text-primary-foreground text-sm rounded-[4px] hover:bg-primary/90 transition-colors"
+            >
+              <Download className="w-4 h-4" />
+              Export
+            </button>
           </div>
         </div>
         <div className="overflow-x-auto">
@@ -757,7 +778,7 @@ export function Analytics() {
                   <td className="px-4 py-3 text-sm">{record.department}</td>
                   <td className="px-4 py-3 text-sm">{record.lastWorkingDate}</td>
                   <td className="px-4 py-3 text-sm">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ${
                       record.category === "NDC Pending"
                         ? "bg-blue-50 text-blue-700 border border-blue-200"
                         : "bg-orange-50 text-orange-700 border border-orange-200"
@@ -766,7 +787,7 @@ export function Analytics() {
                     </span>
                   </td>
                   <td className="px-4 py-3 text-sm">
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-700 border border-red-200">
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium whitespace-nowrap bg-red-50 text-red-700 border border-red-200">
                       {record.delayDays} days
                     </span>
                   </td>

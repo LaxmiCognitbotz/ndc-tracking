@@ -109,6 +109,8 @@ export function Overview() {
   };
 
   const applyApprovalFilters = (filtered: NDCRecord[]) => {
+    const normalize = (str: string) => (str || "").toLowerCase().replace(/[_\s]+/g, "");
+    
     if (approvalDepartmentFilter && approvalStatusFilter) {
       const statusMap: Record<string, string> = {
         'rm': 'rmApprovalStatus', 'it': 'itApprovalStatus', 'abex': 'abexApprovalStatus',
@@ -116,8 +118,9 @@ export function Overview() {
         'administration': 'administrationApprovalStatus', 'security': 'securityApprovalStatus',
         'hr': 'hrApprovalStatus', 'gcchr': 'gccHrApprovalStatus', 'finalabex': 'finalAbexApprovalStatus'
       };
-      const fieldName = statusMap[approvalDepartmentFilter.toLowerCase().replace(/\s+/g, '')] as keyof NDCRecord;
-      return filtered.filter((r) => fieldName && r[fieldName] === approvalStatusFilter);
+      const fieldName = statusMap[normalize(approvalDepartmentFilter)] as keyof NDCRecord;
+      const targetStatus = normalize(approvalStatusFilter);
+      return filtered.filter((r) => fieldName && normalize(r[fieldName] as string) === targetStatus);
     } else if (approvalDepartmentFilter) {
       const statusMap: Record<string, string> = {
         'rm': 'rmApprovalStatus', 'it': 'itApprovalStatus', 'abex': 'abexApprovalStatus',
@@ -125,16 +128,17 @@ export function Overview() {
         'administration': 'administrationApprovalStatus', 'security': 'securityApprovalStatus',
         'hr': 'hrApprovalStatus', 'gcchr': 'gccHrApprovalStatus', 'finalabex': 'finalAbexApprovalStatus'
       };
-      const fieldName = statusMap[approvalDepartmentFilter.toLowerCase().replace(/\s+/g, '')] as keyof NDCRecord;
-      return filtered.filter((r) => fieldName && r[fieldName] !== "");
+      const fieldName = statusMap[normalize(approvalDepartmentFilter)] as keyof NDCRecord;
+      return filtered.filter((r) => fieldName && r[fieldName] !== "" && normalize(r[fieldName] as string) !== "notapplicable");
     } else if (approvalStatusFilter) {
+      const targetStatus = normalize(approvalStatusFilter);
       return filtered.filter((r) => {
         const statuses = [
           r.rmApprovalStatus, r.itApprovalStatus, r.abexApprovalStatus, r.telecomApprovalStatus,
           r.storeApprovalStatus, r.safetyApprovalStatus, r.administrationApprovalStatus,
           r.securityApprovalStatus, r.hrApprovalStatus, r.gccHrApprovalStatus, r.finalAbexApprovalStatus
         ];
-        return statuses.some((status) => status === approvalStatusFilter);
+        return statuses.some((status) => normalize(status) === targetStatus);
       });
     }
     return filtered;
