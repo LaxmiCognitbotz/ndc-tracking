@@ -17,6 +17,8 @@ import { Calendar } from "../../components/ui/calendar";
 import { format } from "date-fns";
 import {
   Users,
+  ChevronLeft,
+  ChevronRight,
 
   CheckCircle,
   Clock,
@@ -64,6 +66,8 @@ export function Overview() {
   const [pendingApprovalModalOpen, setPendingApprovalModalOpen] = useState(false);
   const [overdueModalOpen, setOverdueModalOpen] = useState(false);
   const [historicalDate, setHistoricalDate] = useState<Date>();
+  const [ndcDelayedCurrentPage, setNdcDelayedCurrentPage] = useState(1);
+  const [fnfDelayedCurrentPage, setFnfDelayedCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
   const ndcStages = useMemo(() => {
@@ -223,9 +227,15 @@ export function Overview() {
     return "";
   };
 
-  const FullScreenTable = ({ data, title }: { data: NDCRecord[]; title: string }) => (
+  const FullScreenTable = ({ data, title }: { data: NDCRecord[]; title: string }) => {
+    const [page, setPage] = useState(1);
+    const totalPages = Math.max(1, Math.ceil(data.length / itemsPerPage));
+    const startIndex = (page - 1) * itemsPerPage;
+    const paginatedData = data.slice(startIndex, startIndex + itemsPerPage);
+
+    return (
     <div className="flex flex-col h-full">
-      <div className="p-4 border-b border-border flex items-center justify-between shrink-0">
+      <div className="p-4 border-b border-border flex items-center justify-between shrink-0 bg-card">
         <h3 className="font-semibold text-foreground">{title} ({data.length})</h3>
         <button
           onClick={() => {
@@ -255,8 +265,8 @@ export function Overview() {
               <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">NDC Stage</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-border">
-            {data.map((r) => (
+          <tbody className="divide-y divide-border bg-card">
+            {paginatedData.map((r) => (
               <tr key={r.id} className="hover:bg-muted/50">
                 <td className="px-4 py-3 whitespace-nowrap font-medium">{r.personNumber}</td>
                 <td className="px-4 py-3 whitespace-nowrap">{r.employeeName}</td>
@@ -271,8 +281,34 @@ export function Overview() {
           </tbody>
         </table>
       </div>
+      {data.length > 0 && (
+        <div className="px-6 py-4 border-t border-border flex items-center justify-between shrink-0 bg-card">
+          <div className="text-sm text-muted-foreground">
+            Showing {startIndex + 1} to {Math.min(startIndex + itemsPerPage, data.length)} of {data.length} records
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setPage(Math.max(1, page - 1))}
+              disabled={page === 1}
+              className="p-2 rounded-[4px] border border-border hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <span className="text-sm text-foreground">
+              Page {page} of {totalPages}
+            </span>
+            <button
+              onClick={() => setPage(Math.min(totalPages, page + 1))}
+              disabled={page === totalPages}
+              className="p-2 rounded-[4px] border border-border hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
-  );
+  )};
 
   if (isLoading) return <LoadingScreen />;
 
@@ -516,12 +552,17 @@ export function Overview() {
         <div className="flex-1 overflow-auto p-6">
           {(() => {
             const allDelayed = mockNDCData.filter((r) => getDelayedDays(r) > 0);
+            const totalPages = Math.max(1, Math.ceil(allDelayed.length / itemsPerPage));
+            const startIndex = (ndcDelayedCurrentPage - 1) * itemsPerPage;
+            const sortedDelayed = [...allDelayed].sort((a, b) => getDelayedDays(b) - getDelayedDays(a));
+            const paginatedDelayed = sortedDelayed.slice(startIndex, startIndex + itemsPerPage);
+            
             return (
-              <>
-                <p className="text-sm text-muted-foreground mb-3">{allDelayed.length} delayed records</p>
-                <div className="overflow-x-auto rounded-[4px] border border-border">
+              <div className="h-full flex flex-col">
+                <p className="text-sm text-muted-foreground mb-3 shrink-0">{allDelayed.length} delayed records</p>
+                <div className="overflow-x-auto rounded-[4px] border border-border flex-1">
                   <table className="w-full text-sm">
-                    <thead className="bg-muted sticky top-0">
+                    <thead className="bg-muted sticky top-0 z-10">
                       <tr>
                         <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground whitespace-nowrap">Person Number</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground whitespace-nowrap">Name</th>
@@ -533,7 +574,7 @@ export function Overview() {
                     <tbody className="divide-y divide-border bg-card">
                       {allDelayed.length === 0 ? (
                         <tr><td colSpan={5} className="px-4 py-6 text-center text-muted-foreground">No delayed records found</td></tr>
-                      ) : allDelayed.sort((a, b) => getDelayedDays(b) - getDelayedDays(a)).map((record) => {
+                      ) : paginatedDelayed.map((record) => {
                         const days = getDelayedDays(record);
                         const badgeColor = days > 30
                           ? "bg-red-100 text-red-700"
@@ -555,7 +596,19 @@ export function Overview() {
                     </tbody>
                   </table>
                 </div>
-              </>
+                {allDelayed.length > 0 && (
+                  <div className="mt-4 flex items-center justify-between shrink-0">
+                    <div className="text-sm text-muted-foreground">
+                      Showing {startIndex + 1} to {Math.min(startIndex + itemsPerPage, allDelayed.length)} of {allDelayed.length} records
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => setNdcDelayedCurrentPage(Math.max(1, ndcDelayedCurrentPage - 1))} disabled={ndcDelayedCurrentPage === 1} className="p-2 rounded-[4px] border border-border hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"><ChevronLeft className="w-4 h-4" /></button>
+                      <span className="text-sm text-foreground">Page {ndcDelayedCurrentPage} of {totalPages}</span>
+                      <button onClick={() => setNdcDelayedCurrentPage(Math.min(totalPages, ndcDelayedCurrentPage + 1))} disabled={ndcDelayedCurrentPage === totalPages} className="p-2 rounded-[4px] border border-border hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"><ChevronRight className="w-4 h-4" /></button>
+                    </div>
+                  </div>
+                )}
+              </div>
             );
           })()}
         </div>
@@ -600,12 +653,22 @@ export function Overview() {
         }
       >
         <div className="flex-1 overflow-auto p-6">
-          <h3 className="text-base font-semibold text-orange-800 mb-3">
-            F&F delayed cases <span className="ml-2 text-sm font-normal text-muted-foreground">({kpis.fnfDelayed} records)</span>
+          {(() => {
+             const fnfDelayedData = mockNDCData.filter((r) => {
+                  if (!r.fnfStatus || r.fnfStatus === "Done") return false;
+                  return Math.ceil((new Date().getTime() - new Date(r.lastWorkingDate).getTime()) / (1000 * 60 * 60 * 24)) > 0;
+             });
+             const totalPages = Math.max(1, Math.ceil(fnfDelayedData.length / itemsPerPage));
+             const startIndex = (fnfDelayedCurrentPage - 1) * itemsPerPage;
+             const paginatedDelayed = fnfDelayedData.slice(startIndex, startIndex + itemsPerPage);
+             return (
+               <div className="h-full flex flex-col">
+          <h3 className="text-base font-semibold text-orange-800 mb-3 shrink-0">
+            F&F delayed cases <span className="ml-2 text-sm font-normal text-muted-foreground">({fnfDelayedData.length} records)</span>
           </h3>
-          <div className="overflow-x-auto rounded-[4px] border border-orange-200">
+          <div className="overflow-x-auto rounded-[4px] border border-orange-200 flex-1">
             <table className="w-full text-sm">
-              <thead className="bg-orange-50">
+              <thead className="bg-orange-50 sticky top-0 z-10">
                 <tr>
                   <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground whitespace-nowrap">Person Number</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground whitespace-nowrap">Name</th>
@@ -615,16 +678,10 @@ export function Overview() {
                   <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground whitespace-nowrap">Days Delayed</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-orange-100">
-                {mockNDCData.filter((r) => {
-                  if (!r.fnfStatus || r.fnfStatus === "Done") return false;
-                  return Math.ceil((new Date().getTime() - new Date(r.lastWorkingDate).getTime()) / (1000 * 60 * 60 * 24)) > 0;
-                }).length === 0 ? (
+              <tbody className="divide-y divide-orange-100 bg-card">
+                {fnfDelayedData.length === 0 ? (
                   <tr><td colSpan={6} className="px-4 py-6 text-center text-muted-foreground">No records found</td></tr>
-                ) : mockNDCData.filter((r) => {
-                  if (!r.fnfStatus || r.fnfStatus === "Done") return false;
-                  return Math.ceil((new Date().getTime() - new Date(r.lastWorkingDate).getTime()) / (1000 * 60 * 60 * 24)) > 0;
-                }).map((record) => {
+                ) : paginatedDelayed.map((record) => {
                   const delayDays = Math.ceil((new Date().getTime() - new Date(record.lastWorkingDate).getTime()) / (1000 * 60 * 60 * 24));
                   return (
                     <tr key={record.id} className="hover:bg-orange-50/50">
@@ -644,6 +701,21 @@ export function Overview() {
               </tbody>
             </table>
           </div>
+          {fnfDelayedData.length > 0 && (
+             <div className="mt-4 flex items-center justify-between shrink-0">
+                <div className="text-sm text-muted-foreground">
+                   Showing {startIndex + 1} to {Math.min(startIndex + itemsPerPage, fnfDelayedData.length)} of {fnfDelayedData.length} records
+                </div>
+                <div className="flex items-center gap-2">
+                   <button onClick={() => setFnfDelayedCurrentPage(Math.max(1, fnfDelayedCurrentPage - 1))} disabled={fnfDelayedCurrentPage === 1} className="p-2 rounded-[4px] border border-border hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"><ChevronLeft className="w-4 h-4" /></button>
+                   <span className="text-sm text-foreground">Page {fnfDelayedCurrentPage} of {totalPages}</span>
+                   <button onClick={() => setFnfDelayedCurrentPage(Math.min(totalPages, fnfDelayedCurrentPage + 1))} disabled={fnfDelayedCurrentPage === totalPages} className="p-2 rounded-[4px] border border-border hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"><ChevronRight className="w-4 h-4" /></button>
+                </div>
+             </div>
+          )}
+               </div>
+             );
+          })()}
         </div>
       </FullScreenModal>
 

@@ -6,7 +6,7 @@ import { PPTDownloadButton } from "../../components/common/PPTDownloadButton";
 import { FullScreenModal } from "../../components/common/FullScreenModal";
 import { LoadingScreen } from "../../components/common/LoadingScreen";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../../components/ui/dialog";
-import { FileText, Download, Filter, CheckCircle, XCircle, Clock, Send, CheckSquare, Mail, TrendingUp } from "lucide-react";
+import { FileText, Download, Filter, CheckCircle, XCircle, Clock, Send, CheckSquare, Mail, TrendingUp, ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 
 export function FNFManagement() {
@@ -35,6 +35,8 @@ export function FNFManagement() {
   const [mailDialogOpen, setMailDialogOpen] = useState(false);
   const [mailRecord, setMailRecord] = useState<NDCRecord | null>(null);
   const [mailEmailTo, setMailEmailTo] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [kpiCurrentPage, setKpiCurrentPage] = useState(1);
 
   const filteredData = useMemo(() => {
     const activeRecords = mockNDCData.filter(r => r.fnfStatus && r.fnfStatus.trim() !== "");
@@ -48,6 +50,15 @@ export function FNFManagement() {
     }
     return filtered;
   }, [mockNDCData, statusFilter, searchQuery]);
+
+  const itemsPerPage = 10;
+  const totalPages = Math.max(1, Math.ceil(filteredData.length / itemsPerPage));
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const paginatedData = filteredData.slice(startIndex, startIndex + itemsPerPage);
+
+  const kpiTotalPages = Math.max(1, Math.ceil(kpiModalData.data.length / itemsPerPage));
+  const kpiStartIndex = (kpiCurrentPage - 1) * itemsPerPage;
+  const kpiPaginatedData = kpiModalData.data.slice(kpiStartIndex, kpiStartIndex + itemsPerPage);
 
   const fnfStats = useMemo(() => {
     const activeRecords = mockNDCData.filter(r => r.fnfStatus && r.fnfStatus.trim() !== "");
@@ -102,6 +113,7 @@ export function FNFManagement() {
       avgTAT: { title: "F&F TAT Records", data: activeRecords.filter((r) => r.ndcCompletedDate && r.lastWorkingDate) },
     };
     setKpiModalData(map[type]);
+    setKpiCurrentPage(1);
     setKpiModalOpen(true);
   };
 
@@ -254,7 +266,7 @@ export function FNFManagement() {
               </tr>
             </thead>
             <tbody className="bg-card divide-y divide-border">
-              {filteredData.map((record) => (
+              {paginatedData.map((record) => (
                 <tr key={record.id} className="hover:bg-muted/50">
                   <td className="px-4 py-3 text-sm font-medium">{record.personNumber}</td>
                   <td className="px-4 py-3 text-sm">{record.employeeName}</td>
@@ -296,6 +308,34 @@ export function FNFManagement() {
             </tbody>
           </table>
         </div>
+        
+        {filteredData.length > 0 && (
+          <div className="px-6 py-4 border-t border-border flex items-center justify-between">
+            <div className="text-sm text-muted-foreground">
+              Showing {startIndex + 1} to {Math.min(startIndex + itemsPerPage, filteredData.length)} of{" "}
+              {filteredData.length} records
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                disabled={currentPage === 1}
+                className="p-2 rounded-[4px] border border-border hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <span className="text-sm text-foreground">
+                Page {currentPage} of {totalPages}
+              </span>
+              <button
+                onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                disabled={currentPage === totalPages}
+                className="p-2 rounded-[4px] border border-border hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* KPI Full-Screen Modal */}
@@ -343,7 +383,7 @@ export function FNFManagement() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border bg-card">
-                  {kpiModalData.data.map((record) => (
+                  {kpiPaginatedData.map((record) => (
                     <tr key={record.id} className="hover:bg-muted/50">
                       <td className="px-4 py-3 whitespace-nowrap">{record.personNumber}</td>
                       <td className="px-4 py-3 whitespace-nowrap">{record.employeeName}</td>
@@ -361,6 +401,34 @@ export function FNFManagement() {
                 </tbody>
               </table>
             </div>
+            
+            {kpiModalData.data.length > 0 && (
+              <div className="px-6 py-4 border-t border-border flex items-center justify-between bg-card">
+                <div className="text-sm text-muted-foreground">
+                  Showing {kpiStartIndex + 1} to {Math.min(kpiStartIndex + itemsPerPage, kpiModalData.data.length)} of{" "}
+                  {kpiModalData.data.length} records
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setKpiCurrentPage(Math.max(1, kpiCurrentPage - 1))}
+                    disabled={kpiCurrentPage === 1}
+                    className="p-2 rounded-[4px] border border-border hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <span className="text-sm text-foreground">
+                    Page {kpiCurrentPage} of {kpiTotalPages}
+                  </span>
+                  <button
+                    onClick={() => setKpiCurrentPage(Math.min(kpiTotalPages, kpiCurrentPage + 1))}
+                    disabled={kpiCurrentPage === kpiTotalPages}
+                    className="p-2 rounded-[4px] border border-border hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </FullScreenModal>
