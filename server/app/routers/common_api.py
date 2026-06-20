@@ -6,11 +6,11 @@ from typing import List
 from database import get_db
 from app.models.ndc_record import NdcRecord
 from app.models.ndc_approval import NdcApproval
-from app.schemas.frontend import FrontendNDCRecord
+from app.schemas.common import CommonNDCRecord
 
-router = APIRouter(prefix="/api/v1", tags=["frontend"])
+router = APIRouter(prefix="/api/v1", tags=["common"])
 
-async def fetch_frontend_records(db: AsyncSession) -> List[FrontendNDCRecord]:
+async def fetch_common_records(db: AsyncSession) -> List[CommonNDCRecord]:
     # Fetch all records and approvals.
     records_res = await db.execute(select(NdcRecord).order_by(NdcRecord.ndc_initiated_date.desc()))
     records = records_res.scalars().all()
@@ -27,7 +27,7 @@ async def fetch_frontend_records(db: AsyncSession) -> List[FrontendNDCRecord]:
 
     result = []
     
-    # Map stages to the specific properties frontend expects
+    # Map stages to the specific properties client expects
     stage_key_map = {
         "RM": "rm", "IT": "it", "ABEX": "abex", "Telecom": "telecom", "Store": "store",
         "Safety": "safety", "Administration": "administration", "Security": "security",
@@ -71,18 +71,18 @@ async def fetch_frontend_records(db: AsyncSession) -> List[FrontendNDCRecord]:
                 item[f"{prefix}_approver"] = approval.approver_name or ""
                 item[f"{prefix}_approval_date"] = approval.stage_completed_at.strftime("%Y-%m-%d") if approval.stage_completed_at else ""
 
-        result.append(FrontendNDCRecord(**item))
+        result.append(CommonNDCRecord(**item))
     return result
 
-@router.get("/ndc-records", response_model=List[FrontendNDCRecord])
-async def get_all_ndc_records_for_frontend(db: AsyncSession = Depends(get_db)):
-    return await fetch_frontend_records(db)
+@router.get("/ndc-records", response_model=List[CommonNDCRecord])
+async def get_all_ndc_records_for_common(db: AsyncSession = Depends(get_db)):
+    return await fetch_common_records(db)
 
-@router.get("/fnf-records", response_model=List[FrontendNDCRecord])
-async def get_all_fnf_records_for_frontend(db: AsyncSession = Depends(get_db)):
-    return await fetch_frontend_records(db)
+@router.get("/fnf-records", response_model=List[CommonNDCRecord])
+async def get_all_fnf_records_for_common(db: AsyncSession = Depends(get_db)):
+    return await fetch_common_records(db)
 
-@router.get("/analytics-records", response_model=List[FrontendNDCRecord])
-async def get_all_analytics_records_for_frontend(db: AsyncSession = Depends(get_db)):
-    return await fetch_frontend_records(db)
+@router.get("/analytics-records", response_model=List[CommonNDCRecord])
+async def get_all_analytics_records_for_common(db: AsyncSession = Depends(get_db)):
+    return await fetch_common_records(db)
 

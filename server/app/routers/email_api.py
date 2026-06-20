@@ -22,7 +22,7 @@ class EmailRecipientSchema(BaseModel):
 async def get_email_recipients(db: AsyncSession = Depends(get_db)):
     res = await db.execute(select(EmailRecipient))
     records = res.scalars().all()
-    # Map id to string to match frontend expectations
+    # Map id to string to match client expectations
     return [EmailRecipientSchema(
         id=str(r.id),
         name=r.name,
