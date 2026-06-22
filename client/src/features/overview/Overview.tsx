@@ -201,8 +201,8 @@ export function Overview() {
     const closedFnfOpen = closedCases.filter((r) => r.fnfStatus === "Open").length;
     const closedFnfRevision = closedCases.filter((r) => r.fnfStatus === "Revision Required").length;
 
-    const inProgress = base.filter((r) => getOverallStatus(r) === "In Progress").length;
-    const pendingApproval = base.filter((r) => getOverallStatus(r) === "Pending").length;
+    const inProgress = recoveryPending;
+    const pendingApproval = ndcPendingGCC;
 
     // Average completion time (days from ndcInitiatedDate to ndcCompletedDate for closed cases)
     const completedWithDates = closedCases.filter((r) => r.ndcCompletedDate && r.ndcInitiatedDate);
@@ -731,12 +731,12 @@ export function Overview() {
 
       {/* In Progress Modal */}
       <FullScreenModal open={inProgressModalOpen} onClose={() => setInProgressModalOpen(false)} title="In Progress Cases">
-        <FullScreenTable data={mockNDCData.filter((r) => getOverallStatus(r) === "In Progress")} title="In Progress Cases" />
+        <FullScreenTable data={mockNDCData.filter((r) => r.ndcStage === "Recovery Pending")} title="In Progress Cases" />
       </FullScreenModal>
 
       {/* Pending Approval Modal */}
       <FullScreenModal open={pendingApprovalModalOpen} onClose={() => setPendingApprovalModalOpen(false)} title="Pending Approval">
-        <FullScreenTable data={mockNDCData.filter((r) => getOverallStatus(r) === "Pending")} title="Pending Approval Cases" />
+        <FullScreenTable data={mockNDCData.filter((r) => r.ndcStage === "GCC Pending")} title="Pending Approval Cases" />
       </FullScreenModal>
 
       {/* Overdue Modal */}
