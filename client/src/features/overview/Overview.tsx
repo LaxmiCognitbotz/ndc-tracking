@@ -428,7 +428,7 @@ export function Overview() {
             <div
               onClick={() => {
                 setOpenNDCModalOpen(false);
-                setModalData({ title: "Recovery Pending With Departments", data: mockNDCData.filter((r) => !r.ndcCompletedDate || getOverallStatus(r) !== "Completed").filter((r) => r.recoveryStatus === "Pending") });
+                setModalData({ title: "Recovery Pending With Departments", data: mockNDCData.filter((r) => r.ndcStage === "Recovery Pending") });
                 setModalOpen(true);
               }}
               className="cursor-pointer p-6 bg-card border border-border rounded-[4px] hover:bg-muted/50 transition-colors"
@@ -443,7 +443,7 @@ export function Overview() {
             <div
               onClick={() => {
                 setOpenNDCModalOpen(false);
-                setModalData({ title: "NDC Pending With GCC HR Approval", data: mockNDCData.filter((r) => !r.ndcCompletedDate || getOverallStatus(r) !== "Completed").filter((r) => r.gccHrApprovalStatus === "Pending" || r.gccHrApprovalStatus === "In Progress") });
+                setModalData({ title: "NDC Pending With GCC HR Approval", data: mockNDCData.filter((r) => r.ndcStage === "GCC Pending") });
                 setModalOpen(true);
               }}
               className="cursor-pointer p-6 bg-card border border-border rounded-[4px] hover:bg-muted/50 transition-colors"
