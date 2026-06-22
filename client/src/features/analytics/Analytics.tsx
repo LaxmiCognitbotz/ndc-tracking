@@ -55,12 +55,9 @@ export function Analytics() {
   }, [mockNDCData, ndcChartApprovalFilter]);
 
   const statusData = useMemo(() => {
-    const completed = ndcChartFilteredData.filter((r) => r.ndcCompletedDate).length;
-    const pending = ndcChartFilteredData.filter((r) => {
-      if (r.ndcCompletedDate) return false;
-      return [r.rmApprovalStatus, r.itApprovalStatus, r.hrApprovalStatus, r.securityApprovalStatus].some((s) => s === "Pending");
-    }).length;
-    const inProgress = ndcChartFilteredData.length - completed - pending;
+    const completed = ndcChartFilteredData.filter((r) => r.ndcStage === "NDC Completed").length;
+    const pending = ndcChartFilteredData.filter((r) => r.ndcStage === "GCC Pending").length;
+    const inProgress = ndcChartFilteredData.filter((r) => r.ndcStage === "Recovery Pending").length;
     return [
       { name: "Completed", y: completed, color: "#10b981" },
       { name: "Pending", y: pending, color: "#ef4444" },
@@ -199,15 +196,14 @@ export function Analytics() {
     };
 
     mockNDCData.forEach((record) => {
-      if (!record.ndcCompletedDate || !record.ndcInitiatedDate) return;
+      if (record.ndcStage !== "NDC Completed" || !record.ndcCompletedDate || !record.ndcInitiatedDate) return;
       const completed = new Date(record.ndcCompletedDate);
       const initiated = new Date(record.ndcInitiatedDate);
-      const days = Math.ceil((completed.getTime() - initiated.getTime()) / (1000 * 60 * 60 * 24));
-      const abs = Math.abs(days);
-      if (abs === 0) cats["On or due date"]++;
-      else if (abs <= 2) cats["Within 2 days"]++;
-      else if (abs <= 7) cats["3–7 days"]++;
-      else if (abs <= 30) cats["7–30 days"]++;
+      const days = Math.max(0, Math.ceil((completed.getTime() - initiated.getTime()) / (1000 * 60 * 60 * 24)));
+      if (days === 0) cats["On or due date"]++;
+      else if (days <= 2) cats["Within 2 days"]++;
+      else if (days <= 7) cats["3–7 days"]++;
+      else if (days <= 30) cats["7–30 days"]++;
       else cats["More than 30 days"]++;
     });
 
@@ -264,10 +260,10 @@ export function Analytics() {
     };
 
     mockNDCData.forEach((record) => {
-      if (!record.ndcCompletedDate || !record.lastWorkingDate) return;
+      if (record.ndcStage !== "NDC Completed" || !record.ndcCompletedDate || !record.ndcInitiatedDate) return;
       const days = Math.ceil(
-        Math.abs(
-          new Date(record.ndcCompletedDate).getTime() - new Date(record.lastWorkingDate).getTime()
+        Math.max(0,
+          new Date(record.ndcCompletedDate).getTime() - new Date(record.ndcInitiatedDate).getTime()
         ) / (1000 * 60 * 60 * 24)
       );
       if (days <= 7) cats["Within 7 Days"].count++;
@@ -350,9 +346,13 @@ export function Analytics() {
   // Top Delayed Cases
   const allDelayedCases = useMemo(() => {
     const ndcDelayed = mockNDCData
-      .filter((r) => !r.ndcCompletedDate)
+      .filter((r) => r.ndcStage !== "NDC Completed")
       .map((r) => {
-        const days = Math.max(0, Math.ceil((new Date().getTime() - new Date(r.lastWorkingDate).getTime()) / (1000 * 60 * 60 * 24)));
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const lwd = new Date(r.lastWorkingDate);
+        lwd.setHours(0, 0, 0, 0);
+        const days = Math.max(0, Math.ceil((today.getTime() - lwd.getTime()) / (1000 * 60 * 60 * 24)));
         return { ...r, delayDays: days, category: "NDC Pending" as const };
       })
       .filter((r) => r.delayDays > 0);

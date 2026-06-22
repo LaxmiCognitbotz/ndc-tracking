@@ -172,17 +172,26 @@ export function Overview() {
     const base = mockNDCData;
 
     const totalNDC = base.length;
-    const closedNDC = base.filter((r) => r.ndcCompletedDate && getOverallStatus(r) === "Completed").length;
-    const openNDC = totalNDC - closedNDC;
-    const openCases = base.filter((r) => !r.ndcCompletedDate || getOverallStatus(r) !== "Completed");
-    const closedCases = base.filter((r) => r.ndcCompletedDate && getOverallStatus(r) === "Completed");
+    const closedCases = base.filter((r) => r.ndcStage === "NDC Completed");
+    const closedNDC = closedCases.length;
+    const openNDC = base.filter((r) => ["Recovery Pending", "GCC Pending"].includes(r.ndcStage)).length;
 
-    const recoveryPending = openCases.filter((r) => r.recoveryStatus === "Pending").length;
-    const ndcPendingGCC = openCases.filter((r) => r.gccHrApprovalStatus === "Pending" || r.gccHrApprovalStatus === "In Progress").length;
+    const recoveryPending = base.filter((r) => r.ndcStage === "Recovery Pending").length;
+    const ndcPendingGCC = base.filter((r) => r.ndcStage === "GCC Pending").length;
+
+    const overdueCases = base.filter((r) => {
+      if (r.ndcStage === "NDC Completed") return false;
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const lwd = new Date(r.lastWorkingDate);
+      lwd.setHours(0, 0, 0, 0);
+      return lwd < today;
+    });
+    const overdue = overdueCases.length;
+    const totalDelayed = overdue;
 
     const delayed7to30 = base.filter((r) => { const d = getDelayedDays(r); return d >= 7 && d <= 30; }).length;
     const delayedOver30 = base.filter((r) => getDelayedDays(r) > 30).length;
-    const totalDelayed = delayed7to30 + delayedOver30;
 
     const fnfDelayed = base.filter((r) => {
       if (!r.fnfStatus || r.fnfStatus === "Done") return false;
@@ -194,20 +203,19 @@ export function Overview() {
     const closedFnfOpen = closedCases.filter((r) => r.fnfStatus === "Open").length;
     const closedFnfRevision = closedCases.filter((r) => r.fnfStatus === "Revision Required").length;
 
-    const inProgress = base.filter((r) => getOverallStatus(r) === "In Progress").length;
-    const pendingApproval = base.filter((r) => getOverallStatus(r) === "Pending").length;
-    const overdue = base.filter(isOverdue).length;
+    const inProgress = recoveryPending;
+    const pendingApproval = ndcPendingGCC;
 
-    // Average completion time (days from lastWorkingDate to ndcCompletedDate for closed cases)
-    const completedWithDates = closedCases.filter((r) => r.ndcCompletedDate && r.lastWorkingDate);
+    // Average completion time (days from ndcInitiatedDate to ndcCompletedDate for closed cases)
+    const completedWithDates = closedCases.filter((r) => r.ndcCompletedDate && r.ndcInitiatedDate);
     const avgCompletionDays = completedWithDates.length > 0
-      ? Math.round(
+      ? Number((
           completedWithDates.reduce((sum, r) => {
             const completed = new Date(r.ndcCompletedDate);
-            const started = new Date(r.lastWorkingDate);
-            return sum + Math.abs((completed.getTime() - started.getTime()) / (1000 * 60 * 60 * 24));
+            const started = new Date(r.ndcInitiatedDate);
+            return sum + Math.max(0, (completed.getTime() - started.getTime()) / (1000 * 60 * 60 * 24));
           }, 0) / completedWithDates.length
-        )
+        ).toFixed(1))
       : 0;
 
     return {
