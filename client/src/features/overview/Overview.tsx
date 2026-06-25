@@ -68,6 +68,7 @@ export function Overview() {
   const [historicalDate, setHistoricalDate] = useState<Date>();
   const [ndcDelayedCurrentPage, setNdcDelayedCurrentPage] = useState(1);
   const [fnfDelayedCurrentPage, setFnfDelayedCurrentPage] = useState(1);
+  const [sendingReminder, setSendingReminder] = useState(false);
   const itemsPerPage = 10;
 
   const ndcStages = useMemo(() => {
@@ -104,7 +105,7 @@ export function Overview() {
   };
 
   const getDelayedDays = (record: NDCRecord) => {
-    // At any stage — no exclusion for NDC Completed
+    if (record.ndcStage === "NDC Completed") return 0;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const lwd = new Date(record.lastWorkingDate);
@@ -118,7 +119,7 @@ export function Overview() {
 
   const applyApprovalFilters = (filtered: NDCRecord[]) => {
     const normalize = (str: string) => (str || "").toLowerCase().replace(/[_\s]+/g, "");
-    
+
     if (approvalDepartmentFilter && approvalStatusFilter) {
       const statusMap: Record<string, string> = {
         'rm': 'rmApprovalStatus', 'it': 'itApprovalStatus', 'abex': 'abexApprovalStatus',
@@ -189,8 +190,6 @@ export function Overview() {
 
     const overdueCases = base.filter(isOverdue);
     const overdue = overdueCases.length;
-
-    // Top Delayed: any NDC (at any stage) where today > LWD + 30 days
     const topDelayedCases = base.filter(isTopDelayed);
     const totalDelayed = topDelayedCases.length;
 
@@ -206,21 +205,20 @@ export function Overview() {
     const closedFnfDone = closedCases.filter((r) => r.fnfStatus === "Done").length;
     const closedFnfOpen = closedCases.filter((r) => r.fnfStatus === "Open").length;
     const closedFnfRevision = closedCases.filter((r) => r.fnfStatus === "Revision Required").length;
-const inProgress = recoveryPending;
-    // In Progress: Any NDC pending — active employee or exited employee, at any open stage
-   // const inProgress = base.filter((r) => r.ndcStage !== "NDC Completed").length;
+
+    const inProgress = recoveryPending;
     const pendingApproval = ndcPendingGCC;
 
     // Average completion time (days from ndcInitiatedDate to ndcCompletedDate for closed cases)
     const completedWithDates = closedCases.filter((r) => r.ndcCompletedDate && r.ndcInitiatedDate);
     const avgCompletionDays = completedWithDates.length > 0
       ? Number((
-          completedWithDates.reduce((sum, r) => {
-            const completed = new Date(r.ndcCompletedDate);
-            const started = new Date(r.ndcInitiatedDate);
-            return sum + Math.max(0, (completed.getTime() - started.getTime()) / (1000 * 60 * 60 * 24));
-          }, 0) / completedWithDates.length
-        ).toFixed(1))
+        completedWithDates.reduce((sum, r) => {
+          const completed = new Date(r.ndcCompletedDate);
+          const started = new Date(r.ndcInitiatedDate);
+          return sum + Math.max(0, (completed.getTime() - started.getTime()) / (1000 * 60 * 60 * 24));
+        }, 0) / completedWithDates.length
+      ).toFixed(1))
       : 0;
 
     return {
@@ -251,88 +249,89 @@ const inProgress = recoveryPending;
     const paginatedData = data.slice(startIndex, startIndex + itemsPerPage);
 
     return (
-    <div className="flex flex-col h-full">
-      <div className="p-4 border-b border-border flex items-center justify-between shrink-0 bg-card">
-        <h3 className="font-semibold text-foreground">{title} ({data.length})</h3>
-        <button
-          onClick={() => {
-            const mappedData = data.map(r => ({
-              "Person No.": r.personNumber,
-              "Name": r.employeeName,
-              "Department": r.department,
-              "Last Working Date": r.lastWorkingDate,
-              "NDC Stage": r.ndcStage
-            }));
-            exportToExcel(mappedData, title || "Export");
-          }}
-          className="flex items-center gap-2 px-3 py-1.5 bg-primary text-primary-foreground rounded-[4px] hover:bg-primary/90 transition-colors text-sm"
-        >
-          <Download className="w-3 h-3" />
-          Export
-        </button>
-      </div>
-      <div className="overflow-x-auto overflow-y-auto flex-1">
-        <table className="w-full text-sm">
-          <thead className="bg-muted sticky top-0 z-10">
-            <tr>
-              <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Person No.</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Name</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Department</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Last Working Date</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">NDC Stage</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border bg-card">
-            {paginatedData.map((r) => (
-              <tr key={r.id} className="hover:bg-muted/50">
-                <td className="px-4 py-3 whitespace-nowrap font-medium">{r.personNumber}</td>
-                <td className="px-4 py-3 whitespace-nowrap">{r.employeeName}</td>
-                <td className="px-4 py-3">{r.department}</td>
-                <td className="px-4 py-3 whitespace-nowrap">{r.lastWorkingDate}</td>
-                <td className="px-4 py-3 whitespace-nowrap">{r.ndcStage}</td>
-              </tr>
-            ))}
-            {data.length === 0 && (
-              <tr><td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">No records found</td></tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-      {data.length > 0 && (
-        <div className="px-6 py-4 border-t border-border flex items-center justify-between shrink-0 bg-card">
-          <div className="text-sm text-muted-foreground">
-            Showing {startIndex + 1} to {Math.min(startIndex + itemsPerPage, data.length)} of {data.length} records
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setPage(Math.max(1, page - 1))}
-              disabled={page === 1}
-              className="p-2 rounded-[4px] border border-border hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <span className="text-sm text-foreground">
-              Page {page} of {totalPages}
-            </span>
-            <button
-              onClick={() => setPage(Math.min(totalPages, page + 1))}
-              disabled={page === totalPages}
-              className="p-2 rounded-[4px] border border-border hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
+      <div className="flex flex-col h-full">
+        <div className="p-4 border-b border-border flex items-center justify-between shrink-0 bg-card">
+          <h3 className="font-semibold text-foreground">{title} ({data.length})</h3>
+          <button
+            onClick={() => {
+              const mappedData = data.map(r => ({
+                "Person No.": r.personNumber,
+                "Name": r.employeeName,
+                "Department": r.department,
+                "Last Working Date": r.lastWorkingDate,
+                "NDC Stage": r.ndcStage
+              }));
+              exportToExcel(mappedData, title || "Export");
+            }}
+            className="flex items-center gap-2 px-3 py-1.5 bg-primary text-primary-foreground rounded-[4px] hover:bg-primary/90 transition-colors text-sm"
+          >
+            <Download className="w-3 h-3" />
+            Export
+          </button>
         </div>
-      )}
-    </div>
-  )};
+        <div className="overflow-x-auto overflow-y-auto flex-1">
+          <table className="w-full text-sm">
+            <thead className="bg-muted sticky top-0 z-10">
+              <tr>
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Person No.</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Name</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Department</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Last Working Date</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">NDC Stage</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border bg-card">
+              {paginatedData.map((r) => (
+                <tr key={r.id} className="hover:bg-muted/50">
+                  <td className="px-4 py-3 whitespace-nowrap font-medium">{r.personNumber}</td>
+                  <td className="px-4 py-3 whitespace-nowrap">{r.employeeName}</td>
+                  <td className="px-4 py-3">{r.department}</td>
+                  <td className="px-4 py-3 whitespace-nowrap">{r.lastWorkingDate}</td>
+                  <td className="px-4 py-3 whitespace-nowrap">{r.ndcStage}</td>
+                </tr>
+              ))}
+              {data.length === 0 && (
+                <tr><td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">No records found</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+        {data.length > 0 && (
+          <div className="px-6 py-4 border-t border-border flex items-center justify-between shrink-0 bg-card">
+            <div className="text-sm text-muted-foreground">
+              Showing {startIndex + 1} to {Math.min(startIndex + itemsPerPage, data.length)} of {data.length} records
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setPage(Math.max(1, page - 1))}
+                disabled={page === 1}
+                className="p-2 rounded-[4px] border border-border hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <span className="text-sm text-foreground">
+                Page {page} of {totalPages}
+              </span>
+              <button
+                onClick={() => setPage(Math.min(totalPages, page + 1))}
+                disabled={page === totalPages}
+                className="p-2 rounded-[4px] border border-border hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  };
 
   if (isLoading) return <LoadingScreen />;
 
   const handleDownloadPPT = async () => {
     const pptx = createPPT("Overview Dashboard");
     await addImageSlide(pptx, "KPI Summary", "section-kpi-all");
-    
+
     // const headers = ["Person Number", "Name", "Department", "Last Working Date", "NDC Stage", "Status"];
     // const rows = sortedData.map(r => [
     //   r.personNumber,
@@ -380,40 +379,40 @@ const inProgress = recoveryPending;
       {/* All KPIs wrapper for PPT export */}
       <div id="section-kpi-all" className="space-y-6">
         {/* Row 1: Main KPI cards */}
-      <div id="section-kpi-row1" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div onClick={() => setTotalExitModalOpen(true)} className="cursor-pointer hover:scale-105 transition-transform duration-200">
-          <KPICard title="Total Employee Exit" value={kpis.totalNDC} icon={Users} colorClass="text-primary" bgClass="bg-primary/10" />
+        <div id="section-kpi-row1" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div onClick={() => setTotalExitModalOpen(true)} className="cursor-pointer hover:scale-105 transition-transform duration-200">
+            <KPICard title="Total Employee Exit" value={kpis.totalNDC} icon={Users} colorClass="text-primary" bgClass="bg-primary/10" />
+          </div>
+          <div onClick={() => setOpenNDCModalOpen(true)} className="cursor-pointer hover:scale-105 transition-transform duration-200">
+            <KPICard title="Open NDC" value={kpis.openNDC} icon={FolderOpen} colorClass="text-orange-600" bgClass="bg-orange-50" />
+          </div>
+          <div onClick={() => setClosedNDCModalOpen(true)} className="cursor-pointer hover:scale-105 transition-transform duration-200">
+            <KPICard title="Closed NDC" value={kpis.closedNDC} icon={CheckCircle} colorClass="text-green-600" bgClass="bg-green-50" />
+          </div>
+          <div onClick={() => setDelayedCasesModalOpen(true)} className="cursor-pointer hover:scale-105 transition-transform duration-200">
+            <KPICard title="Top Delayed Cases" value={kpis.totalDelayed} icon={AlertCircle} colorClass="text-red-600" bgClass="bg-red-50" />
+          </div>
         </div>
-        <div onClick={() => setOpenNDCModalOpen(true)} className="cursor-pointer hover:scale-105 transition-transform duration-200">
-          <KPICard title="Open NDC" value={kpis.openNDC} icon={FolderOpen} colorClass="text-orange-600" bgClass="bg-orange-50" />
-        </div>
-        <div onClick={() => setClosedNDCModalOpen(true)} className="cursor-pointer hover:scale-105 transition-transform duration-200">
-          <KPICard title="Closed NDC" value={kpis.closedNDC} icon={CheckCircle} colorClass="text-green-600" bgClass="bg-green-50" />
-        </div>
-        <div onClick={() => setDelayedCasesModalOpen(true)} className="cursor-pointer hover:scale-105 transition-transform duration-200">
-          <KPICard title="Top Delayed Cases" value={kpis.totalDelayed} icon={AlertCircle} colorClass="text-red-600" bgClass="bg-red-50" />
-        </div>
-      </div>
 
-      {/* Row 2: Status KPI cards */}
-      <div id="section-kpi-row2" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div onClick={() => setInProgressModalOpen(true)} className="cursor-pointer hover:scale-105 transition-transform duration-200">
-          <KPICard title="Pending NDC with departments" value={kpis.inProgress} icon={Clock} colorClass="text-yellow-600" bgClass="bg-yellow-50" />
+        {/* Row 2: Status KPI cards */}
+        <div id="section-kpi-row2" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div onClick={() => setInProgressModalOpen(true)} className="cursor-pointer hover:scale-105 transition-transform duration-200">
+            <KPICard title="In Progress Cases" value={kpis.inProgress} icon={Clock} colorClass="text-yellow-600" bgClass="bg-yellow-50" />
+          </div>
+          <div onClick={() => setPendingApprovalModalOpen(true)} className="cursor-pointer hover:scale-105 transition-transform duration-200">
+            <KPICard title="Pending Approval" value={kpis.pendingApproval} icon={AlertTriangle} colorClass="text-orange-600" bgClass="bg-orange-50" />
+          </div>
+          <div onClick={() => setOverdueModalOpen(true)} className="cursor-pointer hover:scale-105 transition-transform duration-200">
+            <KPICard title="Overdue" value={kpis.overdue} icon={XCircle} colorClass="text-red-700" bgClass="bg-red-100" />
+          </div>
+          <KPICard
+            title="Avg Completion Time"
+            value={`${kpis.avgCompletionDays} days`}
+            icon={TrendingUp}
+            colorClass="text-purple-600"
+            bgClass="bg-purple-50"
+          />
         </div>
-        <div onClick={() => setPendingApprovalModalOpen(true)} className="cursor-pointer hover:scale-105 transition-transform duration-200">
-          <KPICard title="Pending NDC with GCC" value={kpis.pendingApproval} icon={AlertTriangle} colorClass="text-orange-600" bgClass="bg-orange-50" />
-        </div>
-        <div onClick={() => setOverdueModalOpen(true)} className="cursor-pointer hover:scale-105 transition-transform duration-200">
-          <KPICard title="Overdue" value={kpis.overdue} icon={XCircle} colorClass="text-red-700" bgClass="bg-red-100" />
-        </div>
-        <KPICard
-          title="Avg Completion Time"
-          value={`${kpis.avgCompletionDays} days`}
-          icon={TrendingUp}
-          colorClass="text-purple-600"
-          bgClass="bg-purple-50"
-        />
-      </div>
       </div>
 
       <DataModal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={modalData.title} data={modalData.data} />
@@ -540,11 +539,24 @@ const inProgress = recoveryPending;
         headerActions={
           <div className="flex items-center gap-3">
             <button
-              onClick={() => toast.info("Sending reminder emails...")}
-              className="flex items-center gap-2 px-3 py-1.5 bg-primary text-primary-foreground text-sm rounded-[4px] hover:bg-primary/90 transition-colors"
+              disabled={sendingReminder}
+              onClick={async () => {
+                setSendingReminder(true);
+                try {
+                  const res = await axios.post("/api/v1/send-delayed-reminder");
+                  const data = res.data?.data || res.data;
+                  toast.success(data?.message || "Reminder email sent successfully!");
+                } catch (err: any) {
+                  const detail = err?.response?.data?.detail || err?.message || "Failed to send email";
+                  toast.error(`Email failed: ${detail}`);
+                } finally {
+                  setSendingReminder(false);
+                }
+              }}
+              className="flex items-center gap-2 px-3 py-1.5 bg-primary text-primary-foreground text-sm rounded-[4px] hover:bg-primary/90 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
             >
               <Mail className="w-4 h-4" />
-              Send Reminder Email
+              {sendingReminder ? "Sending..." : "Send Reminder Email"}
             </button>
             <button
               onClick={() => {
@@ -568,13 +580,12 @@ const inProgress = recoveryPending;
       >
         <div className="flex-1 overflow-auto p-6">
           {(() => {
-            // Show records past LWD + 30 days, at any stage
             const allDelayed = mockNDCData.filter(isTopDelayed);
             const totalPages = Math.max(1, Math.ceil(allDelayed.length / itemsPerPage));
             const startIndex = (ndcDelayedCurrentPage - 1) * itemsPerPage;
             const sortedDelayed = [...allDelayed].sort((a, b) => getDelayedDays(b) - getDelayedDays(a));
             const paginatedDelayed = sortedDelayed.slice(startIndex, startIndex + itemsPerPage);
-            
+
             return (
               <div className="h-full flex flex-col">
                 <p className="text-sm text-muted-foreground mb-3 shrink-0">{allDelayed.length} delayed records</p>
@@ -597,8 +608,8 @@ const inProgress = recoveryPending;
                         const badgeColor = days > 30
                           ? "bg-red-100 text-red-700"
                           : days >= 7
-                          ? "bg-amber-100 text-amber-700"
-                          : "bg-yellow-100 text-yellow-700";
+                            ? "bg-amber-100 text-amber-700"
+                            : "bg-yellow-100 text-yellow-700";
                         return (
                           <tr key={record.id} className="hover:bg-muted/50">
                             <td className="px-4 py-3 whitespace-nowrap font-medium">{record.personNumber}</td>
@@ -640,11 +651,24 @@ const inProgress = recoveryPending;
         headerActions={
           <div className="flex items-center gap-3">
             <button
-              onClick={() => toast.info("Sending reminder emails to all F&F delayed cases...")}
-              className="flex items-center gap-2 px-3 py-1.5 bg-primary text-primary-foreground text-sm rounded-[4px] hover:bg-primary/90 transition-colors"
+              disabled={sendingReminder}
+              onClick={async () => {
+                setSendingReminder(true);
+                try {
+                  const res = await axios.post("/api/v1/send-delayed-reminder");
+                  const data = res.data?.data || res.data;
+                  toast.success(data?.message || "Reminder email sent successfully!");
+                } catch (err: any) {
+                  const detail = err?.response?.data?.detail || err?.message || "Failed to send email";
+                  toast.error(`Email failed: ${detail}`);
+                } finally {
+                  setSendingReminder(false);
+                }
+              }}
+              className="flex items-center gap-2 px-3 py-1.5 bg-primary text-primary-foreground text-sm rounded-[4px] hover:bg-primary/90 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
             >
               <Mail className="w-4 h-4" />
-              Send Reminder Email
+              {sendingReminder ? "Sending..." : "Send Reminder Email"}
             </button>
             <button
               onClick={() => {
@@ -672,79 +696,79 @@ const inProgress = recoveryPending;
       >
         <div className="flex-1 overflow-auto p-6">
           {(() => {
-             const fnfDelayedData = mockNDCData.filter((r) => {
-                  if (!r.fnfStatus || r.fnfStatus === "Done") return false;
-                  return Math.ceil((new Date().getTime() - new Date(r.lastWorkingDate).getTime()) / (1000 * 60 * 60 * 24)) > 0;
-             });
-             const totalPages = Math.max(1, Math.ceil(fnfDelayedData.length / itemsPerPage));
-             const startIndex = (fnfDelayedCurrentPage - 1) * itemsPerPage;
-             const paginatedDelayed = fnfDelayedData.slice(startIndex, startIndex + itemsPerPage);
-             return (
-               <div className="h-full flex flex-col">
-          <h3 className="text-base font-semibold text-orange-800 mb-3 shrink-0">
-            F&F delayed cases <span className="ml-2 text-sm font-normal text-muted-foreground">({fnfDelayedData.length} records)</span>
-          </h3>
-          <div className="overflow-x-auto rounded-[4px] border border-orange-200 flex-1">
-            <table className="w-full text-sm">
-              <thead className="bg-orange-50 sticky top-0 z-10">
-                <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground whitespace-nowrap">Person Number</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground whitespace-nowrap">Name</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground whitespace-nowrap">Department</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground whitespace-nowrap">Last Working Date</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground whitespace-nowrap">F&F Status</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground whitespace-nowrap">Days Delayed</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-orange-100 bg-card">
-                {fnfDelayedData.length === 0 ? (
-                  <tr><td colSpan={6} className="px-4 py-6 text-center text-muted-foreground">No records found</td></tr>
-                ) : paginatedDelayed.map((record) => {
-                  const delayDays = Math.ceil((new Date().getTime() - new Date(record.lastWorkingDate).getTime()) / (1000 * 60 * 60 * 24));
-                  return (
-                    <tr key={record.id} className="hover:bg-orange-50/50">
-                      <td className="px-4 py-3 whitespace-nowrap font-medium">{record.personNumber}</td>
-                      <td className="px-4 py-3 whitespace-nowrap">{record.employeeName}</td>
-                      <td className="px-4 py-3">{record.department}</td>
-                      <td className="px-4 py-3 whitespace-nowrap">{record.lastWorkingDate}</td>
-                      <td className="px-4 py-3">
-                        <span className="inline-flex items-center px-2 py-1 rounded-[4px] text-xs font-medium bg-orange-100 text-orange-700 whitespace-nowrap">{record.fnfStatus}</span>
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-700">{delayDays} days</span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-          {fnfDelayedData.length > 0 && (
-             <div className="mt-4 flex items-center justify-between shrink-0">
-                <div className="text-sm text-muted-foreground">
-                   Showing {startIndex + 1} to {Math.min(startIndex + itemsPerPage, fnfDelayedData.length)} of {fnfDelayedData.length} records
+            const fnfDelayedData = mockNDCData.filter((r) => {
+              if (!r.fnfStatus || r.fnfStatus === "Done") return false;
+              return Math.ceil((new Date().getTime() - new Date(r.lastWorkingDate).getTime()) / (1000 * 60 * 60 * 24)) > 0;
+            });
+            const totalPages = Math.max(1, Math.ceil(fnfDelayedData.length / itemsPerPage));
+            const startIndex = (fnfDelayedCurrentPage - 1) * itemsPerPage;
+            const paginatedDelayed = fnfDelayedData.slice(startIndex, startIndex + itemsPerPage);
+            return (
+              <div className="h-full flex flex-col">
+                <h3 className="text-base font-semibold text-orange-800 mb-3 shrink-0">
+                  F&F delayed cases <span className="ml-2 text-sm font-normal text-muted-foreground">({fnfDelayedData.length} records)</span>
+                </h3>
+                <div className="overflow-x-auto rounded-[4px] border border-orange-200 flex-1">
+                  <table className="w-full text-sm">
+                    <thead className="bg-orange-50 sticky top-0 z-10">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground whitespace-nowrap">Person Number</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground whitespace-nowrap">Name</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground whitespace-nowrap">Department</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground whitespace-nowrap">Last Working Date</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground whitespace-nowrap">F&F Status</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground whitespace-nowrap">Days Delayed</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-orange-100 bg-card">
+                      {fnfDelayedData.length === 0 ? (
+                        <tr><td colSpan={6} className="px-4 py-6 text-center text-muted-foreground">No records found</td></tr>
+                      ) : paginatedDelayed.map((record) => {
+                        const delayDays = Math.ceil((new Date().getTime() - new Date(record.lastWorkingDate).getTime()) / (1000 * 60 * 60 * 24));
+                        return (
+                          <tr key={record.id} className="hover:bg-orange-50/50">
+                            <td className="px-4 py-3 whitespace-nowrap font-medium">{record.personNumber}</td>
+                            <td className="px-4 py-3 whitespace-nowrap">{record.employeeName}</td>
+                            <td className="px-4 py-3">{record.department}</td>
+                            <td className="px-4 py-3 whitespace-nowrap">{record.lastWorkingDate}</td>
+                            <td className="px-4 py-3">
+                              <span className="inline-flex items-center px-2 py-1 rounded-[4px] text-xs font-medium bg-orange-100 text-orange-700 whitespace-nowrap">{record.fnfStatus}</span>
+                            </td>
+                            <td className="px-4 py-3 whitespace-nowrap">
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-700">{delayDays} days</span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
-                <div className="flex items-center gap-2">
-                   <button onClick={() => setFnfDelayedCurrentPage(Math.max(1, fnfDelayedCurrentPage - 1))} disabled={fnfDelayedCurrentPage === 1} className="p-2 rounded-[4px] border border-border hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"><ChevronLeft className="w-4 h-4" /></button>
-                   <span className="text-sm text-foreground">Page {fnfDelayedCurrentPage} of {totalPages}</span>
-                   <button onClick={() => setFnfDelayedCurrentPage(Math.min(totalPages, fnfDelayedCurrentPage + 1))} disabled={fnfDelayedCurrentPage === totalPages} className="p-2 rounded-[4px] border border-border hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"><ChevronRight className="w-4 h-4" /></button>
-                </div>
-             </div>
-          )}
-               </div>
-             );
+                {fnfDelayedData.length > 0 && (
+                  <div className="mt-4 flex items-center justify-between shrink-0">
+                    <div className="text-sm text-muted-foreground">
+                      Showing {startIndex + 1} to {Math.min(startIndex + itemsPerPage, fnfDelayedData.length)} of {fnfDelayedData.length} records
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => setFnfDelayedCurrentPage(Math.max(1, fnfDelayedCurrentPage - 1))} disabled={fnfDelayedCurrentPage === 1} className="p-2 rounded-[4px] border border-border hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"><ChevronLeft className="w-4 h-4" /></button>
+                      <span className="text-sm text-foreground">Page {fnfDelayedCurrentPage} of {totalPages}</span>
+                      <button onClick={() => setFnfDelayedCurrentPage(Math.min(totalPages, fnfDelayedCurrentPage + 1))} disabled={fnfDelayedCurrentPage === totalPages} className="p-2 rounded-[4px] border border-border hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"><ChevronRight className="w-4 h-4" /></button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
           })()}
         </div>
       </FullScreenModal>
 
       {/* In Progress Modal */}
-      <FullScreenModal open={inProgressModalOpen} onClose={() => setInProgressModalOpen(false)} title="Pending NDC with departments">
-        <FullScreenTable data={mockNDCData.filter((r) => r.ndcStage !== "NDC Completed")} title="Pending NDC with departments" />
+      <FullScreenModal open={inProgressModalOpen} onClose={() => setInProgressModalOpen(false)} title="In Progress Cases">
+        <FullScreenTable data={mockNDCData.filter((r) => r.ndcStage === "Recovery Pending")} title="In Progress Cases" />
       </FullScreenModal>
 
       {/* Pending Approval Modal */}
-      <FullScreenModal open={pendingApprovalModalOpen} onClose={() => setPendingApprovalModalOpen(false)} title="Pending NDC with GCC">
-        <FullScreenTable data={mockNDCData.filter((r) => r.ndcStage === "GCC Pending")} title="Pending NDC with GCC" />
+      <FullScreenModal open={pendingApprovalModalOpen} onClose={() => setPendingApprovalModalOpen(false)} title="Pending Approval">
+        <FullScreenTable data={mockNDCData.filter((r) => r.ndcStage === "GCC Pending")} title="Pending Approval Cases" />
       </FullScreenModal>
 
       {/* Overdue Modal */}
@@ -754,7 +778,7 @@ const inProgress = recoveryPending;
 
       <FilterBar
         departmentFilter=""
-        setDepartmentFilter={() => {}}
+        setDepartmentFilter={() => { }}
         ndcStageFilter={ndcStageFilter}
         setNdcStageFilter={setNdcStageFilter}
         approvalDepartmentFilter={approvalDepartmentFilter}
@@ -768,33 +792,33 @@ const inProgress = recoveryPending;
       />
 
       <div id="section-ndc-table">
-      <NDCTable
-        data={sortedData}
-        currentPage={currentPage}
-        setCurrentPage={setCurrentPage}
-        itemsPerPage={itemsPerPage}
-        onSort={handleSort}
-        getRowHighlight={getRowHighlight}
-        onExport={(visibleColumns) => {
-          const mappedData = sortedData.map(r => {
-            const obj: any = {};
-            visibleColumns.forEach(col => {
-              let value = r[col.key as keyof NDCRecord];
-              if (col.key.includes("ApprovalStatus")) {
-                if (value === "PENDING") value = "Pending";
-                else if (value === "IN_PROGRESS") value = "In Progress";
-                else if (value === "COMPLETED") value = "Completed";
-                else if (value === "NOT_APPLICABLE") value = "Not Applicable";
-                else if (value) value = value.toString().charAt(0).toUpperCase() + value.toString().slice(1).toLowerCase();
-                else value = "Not Applicable";
-              }
-              obj[col.label] = value;
+        <NDCTable
+          data={sortedData}
+          currentPage={currentPage}
+          setCurrentPage={setCurrentPage}
+          itemsPerPage={itemsPerPage}
+          onSort={handleSort}
+          getRowHighlight={getRowHighlight}
+          onExport={(visibleColumns) => {
+            const mappedData = sortedData.map(r => {
+              const obj: any = {};
+              visibleColumns.forEach(col => {
+                let value = r[col.key as keyof NDCRecord];
+                if (col.key.includes("ApprovalStatus")) {
+                  if (value === "PENDING") value = "Pending";
+                  else if (value === "IN_PROGRESS") value = "In Progress";
+                  else if (value === "COMPLETED") value = "Completed";
+                  else if (value === "NOT_APPLICABLE") value = "Not Applicable";
+                  else if (value) value = value.toString().charAt(0).toUpperCase() + value.toString().slice(1).toLowerCase();
+                  else value = "Not Applicable";
+                }
+                obj[col.label] = value;
+              });
+              return obj;
             });
-            return obj;
-          });
-          exportToExcel(mappedData, "NDC_Records");
-        }}
-      />
+            exportToExcel(mappedData, "NDC_Records");
+          }}
+        />
       </div>
     </div>
   );

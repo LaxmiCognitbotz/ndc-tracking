@@ -10,12 +10,12 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     // Determine the error message
-    const message = 
-      error.response?.data?.message || 
-      error.response?.data?.detail || 
-      error.message || 
+    const message =
+      error.response?.data?.message ||
+      error.response?.data?.detail ||
+      error.message ||
       "An unexpected API error occurred.";
-      
+
     // Display global error toast
     toast.error(`Error: ${message}`, {
       description: error.response?.status ? `Status code: ${error.response.status}` : "Network error",
