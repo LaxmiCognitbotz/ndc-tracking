@@ -397,10 +397,10 @@ export function Overview() {
         {/* Row 2: Status KPI cards */}
         <div id="section-kpi-row2" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <div onClick={() => setInProgressModalOpen(true)} className="cursor-pointer hover:scale-105 transition-transform duration-200">
-            <KPICard title="In Progress Cases" value={kpis.inProgress} icon={Clock} colorClass="text-yellow-600" bgClass="bg-yellow-50" />
+            <KPICard title="Pending NDC with departments" value={kpis.inProgress} icon={Clock} colorClass="text-yellow-600" bgClass="bg-yellow-50" />
           </div>
           <div onClick={() => setPendingApprovalModalOpen(true)} className="cursor-pointer hover:scale-105 transition-transform duration-200">
-            <KPICard title="Pending Approval" value={kpis.pendingApproval} icon={AlertTriangle} colorClass="text-orange-600" bgClass="bg-orange-50" />
+            <KPICard title="Pending NDC with GCC" value={kpis.pendingApproval} icon={AlertTriangle} colorClass="text-orange-600" bgClass="bg-orange-50" />
           </div>
           <div onClick={() => setOverdueModalOpen(true)} className="cursor-pointer hover:scale-105 transition-transform duration-200">
             <KPICard title="Overdue" value={kpis.overdue} icon={XCircle} colorClass="text-red-700" bgClass="bg-red-100" />
@@ -762,13 +762,13 @@ export function Overview() {
       </FullScreenModal>
 
       {/* In Progress Modal */}
-      <FullScreenModal open={inProgressModalOpen} onClose={() => setInProgressModalOpen(false)} title="In Progress Cases">
-        <FullScreenTable data={mockNDCData.filter((r) => r.ndcStage === "Recovery Pending")} title="In Progress Cases" />
+      <FullScreenModal open={inProgressModalOpen} onClose={() => setInProgressModalOpen(false)} title="Pending NDC with departments">
+        <FullScreenTable data={mockNDCData.filter((r) => r.ndcStage === "Recovery Pending")} title="Pending NDC with departments" />
       </FullScreenModal>
 
       {/* Pending Approval Modal */}
-      <FullScreenModal open={pendingApprovalModalOpen} onClose={() => setPendingApprovalModalOpen(false)} title="Pending Approval">
-        <FullScreenTable data={mockNDCData.filter((r) => r.ndcStage === "GCC Pending")} title="Pending Approval Cases" />
+      <FullScreenModal open={pendingApprovalModalOpen} onClose={() => setPendingApprovalModalOpen(false)} title="Pending NDC with GCC">
+        <FullScreenTable data={mockNDCData.filter((r) => r.ndcStage === "GCC Pending")} title="Pending NDC with GCC" />
       </FullScreenModal>
 
       {/* Overdue Modal */}
