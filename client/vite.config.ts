@@ -17,6 +17,7 @@ function figmaAssetResolver() {
 }
 
 export default defineConfig({
+  base: '/ndc/',
   plugins: [
     figmaAssetResolver(),
     // The React and Tailwind plugins are both required for Make, even if
@@ -26,11 +27,12 @@ export default defineConfig({
   ],
   server: {
     port: 7002,
-    open: '/ndc-reporting/overview',
+    open: '/ndc/ndc-reporting/overview',
     proxy: {
-      "/api": {
-        target: "http://127.0.0.1:8000",
+      "/ndc/api": {
+        target: "http://127.0.0.1:8010",
         changeOrigin: true,
+        rewrite: (path: string) => path.replace(/^\/ndc/, ''),
       },
     },
   },

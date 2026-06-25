@@ -2,7 +2,7 @@ import axios from "axios";
 import { toast } from "sonner";
 
 const api = axios.create({
-  // baseURL can be added here if needed, currently using relative paths like /api/v1/...
+  baseURL: import.meta.env.BASE_URL, // Resolves to '/ndc/' from vite base config
 });
 
 // Response interceptor for API calls

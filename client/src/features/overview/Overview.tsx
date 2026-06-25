@@ -104,7 +104,7 @@ export function Overview() {
   };
 
   const getDelayedDays = (record: NDCRecord) => {
-    if (record.ndcStage === "NDC Completed") return 0;
+    // At any stage — no exclusion for NDC Completed
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const lwd = new Date(record.lastWorkingDate);
@@ -112,6 +112,9 @@ export function Overview() {
     const diff = today.getTime() - lwd.getTime();
     return diff > 0 ? Math.ceil(diff / (1000 * 60 * 60 * 24)) : 0;
   };
+
+  // Top Delayed Cases: NDC not cleared within LWD + 30 days, at any stage
+  const isTopDelayed = (record: NDCRecord) => getDelayedDays(record) > 30;
 
   const applyApprovalFilters = (filtered: NDCRecord[]) => {
     const normalize = (str: string) => (str || "").toLowerCase().replace(/[_\s]+/g, "");
@@ -186,7 +189,10 @@ export function Overview() {
 
     const overdueCases = base.filter(isOverdue);
     const overdue = overdueCases.length;
-    const totalDelayed = overdue;
+
+    // Top Delayed: any NDC (at any stage) where today > LWD + 30 days
+    const topDelayedCases = base.filter(isTopDelayed);
+    const totalDelayed = topDelayedCases.length;
 
     const delayed7to30 = base.filter((r) => { const d = getDelayedDays(r); return d >= 7 && d <= 30; }).length;
     const delayedOver30 = base.filter((r) => getDelayedDays(r) > 30).length;
@@ -200,8 +206,9 @@ export function Overview() {
     const closedFnfDone = closedCases.filter((r) => r.fnfStatus === "Done").length;
     const closedFnfOpen = closedCases.filter((r) => r.fnfStatus === "Open").length;
     const closedFnfRevision = closedCases.filter((r) => r.fnfStatus === "Revision Required").length;
-
-    const inProgress = recoveryPending;
+const inProgress = recoveryPending;
+    // In Progress: Any NDC pending — active employee or exited employee, at any open stage
+   // const inProgress = base.filter((r) => r.ndcStage !== "NDC Completed").length;
     const pendingApproval = ndcPendingGCC;
 
     // Average completion time (days from ndcInitiatedDate to ndcCompletedDate for closed cases)
@@ -391,10 +398,10 @@ export function Overview() {
       {/* Row 2: Status KPI cards */}
       <div id="section-kpi-row2" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <div onClick={() => setInProgressModalOpen(true)} className="cursor-pointer hover:scale-105 transition-transform duration-200">
-          <KPICard title="In Progress Cases" value={kpis.inProgress} icon={Clock} colorClass="text-yellow-600" bgClass="bg-yellow-50" />
+          <KPICard title="Pending NDC with departments" value={kpis.inProgress} icon={Clock} colorClass="text-yellow-600" bgClass="bg-yellow-50" />
         </div>
         <div onClick={() => setPendingApprovalModalOpen(true)} className="cursor-pointer hover:scale-105 transition-transform duration-200">
-          <KPICard title="Pending Approval" value={kpis.pendingApproval} icon={AlertTriangle} colorClass="text-orange-600" bgClass="bg-orange-50" />
+          <KPICard title="Pending NDC with GCC" value={kpis.pendingApproval} icon={AlertTriangle} colorClass="text-orange-600" bgClass="bg-orange-50" />
         </div>
         <div onClick={() => setOverdueModalOpen(true)} className="cursor-pointer hover:scale-105 transition-transform duration-200">
           <KPICard title="Overdue" value={kpis.overdue} icon={XCircle} colorClass="text-red-700" bgClass="bg-red-100" />
@@ -541,7 +548,7 @@ export function Overview() {
             </button>
             <button
               onClick={() => {
-                const allDelayed = mockNDCData.filter((r) => getDelayedDays(r) > 0);
+                const allDelayed = mockNDCData.filter(isTopDelayed);
                 const mappedData = allDelayed.map(r => ({
                   "Person Number": r.personNumber,
                   "Name": r.employeeName,
@@ -561,7 +568,8 @@ export function Overview() {
       >
         <div className="flex-1 overflow-auto p-6">
           {(() => {
-            const allDelayed = mockNDCData.filter((r) => getDelayedDays(r) > 0);
+            // Show records past LWD + 30 days, at any stage
+            const allDelayed = mockNDCData.filter(isTopDelayed);
             const totalPages = Math.max(1, Math.ceil(allDelayed.length / itemsPerPage));
             const startIndex = (ndcDelayedCurrentPage - 1) * itemsPerPage;
             const sortedDelayed = [...allDelayed].sort((a, b) => getDelayedDays(b) - getDelayedDays(a));
@@ -730,13 +738,13 @@ export function Overview() {
       </FullScreenModal>
 
       {/* In Progress Modal */}
-      <FullScreenModal open={inProgressModalOpen} onClose={() => setInProgressModalOpen(false)} title="In Progress Cases">
-        <FullScreenTable data={mockNDCData.filter((r) => r.ndcStage === "Recovery Pending")} title="In Progress Cases" />
+      <FullScreenModal open={inProgressModalOpen} onClose={() => setInProgressModalOpen(false)} title="Pending NDC with departments">
+        <FullScreenTable data={mockNDCData.filter((r) => r.ndcStage !== "NDC Completed")} title="Pending NDC with departments" />
       </FullScreenModal>
 
       {/* Pending Approval Modal */}
-      <FullScreenModal open={pendingApprovalModalOpen} onClose={() => setPendingApprovalModalOpen(false)} title="Pending Approval">
-        <FullScreenTable data={mockNDCData.filter((r) => r.ndcStage === "GCC Pending")} title="Pending Approval Cases" />
+      <FullScreenModal open={pendingApprovalModalOpen} onClose={() => setPendingApprovalModalOpen(false)} title="Pending NDC with GCC">
+        <FullScreenTable data={mockNDCData.filter((r) => r.ndcStage === "GCC Pending")} title="Pending NDC with GCC" />
       </FullScreenModal>
 
       {/* Overdue Modal */}

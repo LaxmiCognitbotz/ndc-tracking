@@ -1,12 +1,14 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router";
+import { createBrowserRouter, RouterProvider, Navigate, Outlet } from "react-router";
 import { Overview } from "./features/overview/Overview";
 import { Analytics } from "./features/analytics/Analytics";
 import { FNFManagement } from "./features/fnf/FNFManagement";
 import { EmailConfig } from "./features/email-config/EmailConfig";
 import { Sidebar } from "./layouts/Sidebar";
 import { SidebarProvider, useSidebar } from "./context/SidebarContext";
+import { Toaster } from "sonner";
+import { GlobalErrorBoundary } from "./components/common/GlobalErrorBoundary";
 
-function AppContent() {
+function Layout() {
   const { isCollapsed } = useSidebar();
 
   return (
@@ -15,30 +17,37 @@ function AppContent() {
       <div
         className={`transition-all duration-300 ${isCollapsed ? "ml-20" : "ml-64"}`}
       >
-        <Routes>
-          <Route path="/" element={<Navigate to="/ndc-reporting/overview" replace />} />
-          <Route path="/ndc-reporting/overview" element={<Overview />} />
-          <Route path="/ndc-reporting/analytics" element={<Analytics />} />
-          <Route path="/ndc-reporting/fnf" element={<FNFManagement />} />
-          <Route path="/ndc-reporting/email-config" element={<EmailConfig />} />
-        </Routes>
+        <Outlet />
       </div>
+      <Toaster position="bottom-right" richColors />
     </div>
   );
 }
 
-import { Toaster } from "sonner";
-import { GlobalErrorBoundary } from "./components/common/GlobalErrorBoundary";
+const router = createBrowserRouter(
+  [
+    {
+      element: (
+        <SidebarProvider>
+          <Layout />
+        </SidebarProvider>
+      ),
+      children: [
+        { index: true, element: <Navigate to="ndc-reporting/overview" replace /> },
+        { path: "ndc-reporting/overview", element: <Overview /> },
+        { path: "ndc-reporting/analytics", element: <Analytics /> },
+        { path: "ndc-reporting/fnf", element: <FNFManagement /> },
+        { path: "ndc-reporting/email-config", element: <EmailConfig /> },
+      ],
+    },
+  ],
+  { basename: "/ndc" }
+);
 
 export default function App() {
   return (
     <GlobalErrorBoundary>
-      <BrowserRouter>
-        <SidebarProvider>
-          <AppContent />
-          <Toaster position="bottom-right" richColors />
-        </SidebarProvider>
-      </BrowserRouter>
+      <RouterProvider router={router} />
     </GlobalErrorBoundary>
   );
 }
