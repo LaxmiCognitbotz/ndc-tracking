@@ -34,6 +34,8 @@ export function DataModal({ isOpen, onClose, title, data }: DataModalProps) {
       record.hrApprovalStatus,
       record.gccHrApprovalStatus,
       record.finalAbexApprovalStatus,
+      record.businessSpecificApprovalStatus,
+      record.legatrixApprovalStatus,
     ].filter((s) => s !== "Not Applicable" && s !== "");
 
     if (statuses.some((s) => s === "Pending")) return "Pending";
@@ -79,10 +81,35 @@ export function DataModal({ isOpen, onClose, title, data }: DataModalProps) {
                       <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Delay Days</th>
                     )}
                     <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Overall Status</th>
+                    
+                    {/* All Approval Stages (Status + Date) in proper order */}
                     <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">RM Approval</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">RM Approval Date</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">IT Approval</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">HR Approval</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">IT Approval Date</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Abex Approval</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Abex Approval Date</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Telecom Approval</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Telecom Approval Date</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Store Approval</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Store Approval Date</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Safety Approval</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Safety Approval Date</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Administration Approval</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Administration Approval Date</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Security Approval</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Security Approval Date</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">HR Approval</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">HR Approval Date</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">GCC HR Approval</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">GCC HR Approval Date</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Business Specific Approval</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Business Specific Approval Date</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Final Abex Approval</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Final Abex Approval Date</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Legatrix Approval</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Legatrix Approval Date</th>
+
                     {!isOverdueModal && (
                       <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">NDC Completed</th>
                     )}
@@ -113,18 +140,46 @@ export function DataModal({ isOpen, onClose, title, data }: DataModalProps) {
                         <td className="px-4 py-3 text-sm whitespace-nowrap">
                           <StatusBadge status={getOverallStatus(record)} />
                         </td>
-                        <td className="px-4 py-3 text-sm whitespace-nowrap">
-                          <StatusBadge status={record.rmApprovalStatus} />
-                        </td>
-                        <td className="px-4 py-3 text-sm whitespace-nowrap">
-                          <StatusBadge status={record.itApprovalStatus} />
-                        </td>
-                        <td className="px-4 py-3 text-sm whitespace-nowrap">
-                          <StatusBadge status={record.hrApprovalStatus} />
-                        </td>
-                        <td className="px-4 py-3 text-sm whitespace-nowrap">
-                          <StatusBadge status={record.securityApprovalStatus} />
-                        </td>
+                        
+                        {/* All Approval Stages Data */}
+                        <td className="px-4 py-3 text-sm whitespace-nowrap"><StatusBadge status={record.rmApprovalStatus} /></td>
+                        <td className="px-4 py-3 text-sm whitespace-nowrap">{record.rmApprovalDate || '-'}</td>
+                        
+                        <td className="px-4 py-3 text-sm whitespace-nowrap"><StatusBadge status={record.itApprovalStatus} /></td>
+                        <td className="px-4 py-3 text-sm whitespace-nowrap">{record.itApprovalDate || '-'}</td>
+                        
+                        <td className="px-4 py-3 text-sm whitespace-nowrap"><StatusBadge status={record.abexApprovalStatus} /></td>
+                        <td className="px-4 py-3 text-sm whitespace-nowrap">{record.abexApprovalDate || '-'}</td>
+                        
+                        <td className="px-4 py-3 text-sm whitespace-nowrap"><StatusBadge status={record.telecomApprovalStatus} /></td>
+                        <td className="px-4 py-3 text-sm whitespace-nowrap">{record.telecomApprovalDate || '-'}</td>
+                        
+                        <td className="px-4 py-3 text-sm whitespace-nowrap"><StatusBadge status={record.storeApprovalStatus} /></td>
+                        <td className="px-4 py-3 text-sm whitespace-nowrap">{record.storeApprovalDate || '-'}</td>
+                        
+                        <td className="px-4 py-3 text-sm whitespace-nowrap"><StatusBadge status={record.safetyApprovalStatus} /></td>
+                        <td className="px-4 py-3 text-sm whitespace-nowrap">{record.safetyApprovalDate || '-'}</td>
+                        
+                        <td className="px-4 py-3 text-sm whitespace-nowrap"><StatusBadge status={record.administrationApprovalStatus} /></td>
+                        <td className="px-4 py-3 text-sm whitespace-nowrap">{record.administrationApprovalDate || '-'}</td>
+                        
+                        <td className="px-4 py-3 text-sm whitespace-nowrap"><StatusBadge status={record.securityApprovalStatus} /></td>
+                        <td className="px-4 py-3 text-sm whitespace-nowrap">{record.securityApprovalDate || '-'}</td>
+                        
+                        <td className="px-4 py-3 text-sm whitespace-nowrap"><StatusBadge status={record.hrApprovalStatus} /></td>
+                        <td className="px-4 py-3 text-sm whitespace-nowrap">{record.hrApprovalDate || '-'}</td>
+                        
+                        <td className="px-4 py-3 text-sm whitespace-nowrap"><StatusBadge status={record.gccHrApprovalStatus} /></td>
+                        <td className="px-4 py-3 text-sm whitespace-nowrap">{record.gccHrApprovalDate || '-'}</td>
+                        
+                        <td className="px-4 py-3 text-sm whitespace-nowrap"><StatusBadge status={record.businessSpecificApprovalStatus} /></td>
+                        <td className="px-4 py-3 text-sm whitespace-nowrap">{record.businessSpecificApprovalDate || '-'}</td>
+                        
+                        <td className="px-4 py-3 text-sm whitespace-nowrap"><StatusBadge status={record.finalAbexApprovalStatus} /></td>
+                        <td className="px-4 py-3 text-sm whitespace-nowrap">{record.finalAbexApprovalDate || '-'}</td>
+                        
+                        <td className="px-4 py-3 text-sm whitespace-nowrap"><StatusBadge status={record.legatrixApprovalStatus} /></td>
+                        <td className="px-4 py-3 text-sm whitespace-nowrap">{record.legatrixApprovalDate || '-'}</td>
                         {!isOverdueModal && (
                           <td className="px-4 py-3 text-sm whitespace-nowrap">
                             {record.ndcCompletedDate || (

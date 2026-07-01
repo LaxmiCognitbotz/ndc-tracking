@@ -87,6 +87,8 @@ export function Overview() {
       record.hrApprovalStatus,
       record.gccHrApprovalStatus,
       record.finalAbexApprovalStatus,
+      record.businessSpecificApprovalStatus,
+      record.legatrixApprovalStatus,
     ].filter((s) => s !== "Not Applicable" && s !== "");
 
     if (statuses.some((s) => s === "Pending")) return "Pending";
@@ -125,7 +127,8 @@ export function Overview() {
         'rm': 'rmApprovalStatus', 'it': 'itApprovalStatus', 'abex': 'abexApprovalStatus',
         'telecom': 'telecomApprovalStatus', 'store': 'storeApprovalStatus', 'safety': 'safetyApprovalStatus',
         'administration': 'administrationApprovalStatus', 'security': 'securityApprovalStatus',
-        'hr': 'hrApprovalStatus', 'gcchr': 'gccHrApprovalStatus', 'finalabex': 'finalAbexApprovalStatus'
+        'hr': 'hrApprovalStatus', 'gcchr': 'gccHrApprovalStatus', 'finalabex': 'finalAbexApprovalStatus',
+        'businessspecific': 'businessSpecificApprovalStatus', 'legatrix': 'legatrixApprovalStatus'
       };
       const fieldName = statusMap[normalize(approvalDepartmentFilter)] as keyof NDCRecord;
       const targetStatus = normalize(approvalStatusFilter);
@@ -135,7 +138,8 @@ export function Overview() {
         'rm': 'rmApprovalStatus', 'it': 'itApprovalStatus', 'abex': 'abexApprovalStatus',
         'telecom': 'telecomApprovalStatus', 'store': 'storeApprovalStatus', 'safety': 'safetyApprovalStatus',
         'administration': 'administrationApprovalStatus', 'security': 'securityApprovalStatus',
-        'hr': 'hrApprovalStatus', 'gcchr': 'gccHrApprovalStatus', 'finalabex': 'finalAbexApprovalStatus'
+        'hr': 'hrApprovalStatus', 'gcchr': 'gccHrApprovalStatus', 'finalabex': 'finalAbexApprovalStatus',
+        'businessspecific': 'businessSpecificApprovalStatus', 'legatrix': 'legatrixApprovalStatus'
       };
       const fieldName = statusMap[normalize(approvalDepartmentFilter)] as keyof NDCRecord;
       return filtered.filter((r) => fieldName && r[fieldName] !== "" && normalize(r[fieldName] as string) !== "notapplicable");
@@ -145,7 +149,8 @@ export function Overview() {
         const statuses = [
           r.rmApprovalStatus, r.itApprovalStatus, r.abexApprovalStatus, r.telecomApprovalStatus,
           r.storeApprovalStatus, r.safetyApprovalStatus, r.administrationApprovalStatus,
-          r.securityApprovalStatus, r.hrApprovalStatus, r.gccHrApprovalStatus, r.finalAbexApprovalStatus
+          r.securityApprovalStatus, r.hrApprovalStatus, r.gccHrApprovalStatus, r.finalAbexApprovalStatus,
+          r.businessSpecificApprovalStatus, r.legatrixApprovalStatus
         ];
         return statuses.some((status) => normalize(status) === targetStatus);
       });
@@ -197,14 +202,14 @@ export function Overview() {
     const delayedOver30 = base.filter((r) => getDelayedDays(r) > 30).length;
 
     const fnfDelayed = base.filter((r) => {
-      if (!r.fnfStatus || r.fnfStatus === "Done") return false;
+      if (r.ndcStage !== "NDC Completed" || r.isFnfCompleted) return false;
       const days = Math.ceil((new Date().getTime() - new Date(r.lastWorkingDate).getTime()) / (1000 * 60 * 60 * 24));
       return days > 0;
     }).length;
 
-    const closedFnfDone = closedCases.filter((r) => r.fnfStatus === "Done").length;
-    const closedFnfOpen = closedCases.filter((r) => r.fnfStatus === "Open").length;
-    const closedFnfRevision = closedCases.filter((r) => r.fnfStatus === "Revision Required").length;
+    const closedFnfDone = closedCases.filter((r) => r.isFnfCompleted).length;
+    const closedFnfOpen = closedCases.filter((r) => !r.isFnfCompleted && !r.isFnfRevision).length;
+    const closedFnfRevision = closedCases.filter((r) => r.isFnfRevision).length;
 
     const inProgress = recoveryPending;
     const pendingApproval = ndcPendingGCC;
@@ -481,7 +486,13 @@ export function Overview() {
                   onClick={() => {
                     setClosedNDCModalOpen(false);
                     const closedCases = mockNDCData.filter((r) => r.ndcStage === "NDC Completed");
-                    setModalData({ title: label, data: closedCases.filter((r) => r.fnfStatus === key) });
+                    if (key === "Done") {
+                      setModalData({ title: label, data: closedCases.filter((r) => r.isFnfCompleted) });
+                    } else if (key === "Open") {
+                      setModalData({ title: label, data: closedCases.filter((r) => !r.isFnfCompleted && !r.isFnfRevision) });
+                    } else {
+                      setModalData({ title: label, data: closedCases.filter((r) => r.isFnfRevision) });
+                    }
                     setModalOpen(true);
                   }}
                   className="cursor-pointer p-6 bg-card border border-border rounded-[4px] hover:bg-muted/50 transition-colors"
@@ -673,7 +684,7 @@ export function Overview() {
             <button
               onClick={() => {
                 const fnfDelayedData = mockNDCData.filter((r) => {
-                  if (!r.fnfStatus || r.fnfStatus === "Done") return false;
+                  if (r.ndcStage !== "NDC Completed" || r.isFnfCompleted) return false;
                   return Math.ceil((new Date().getTime() - new Date(r.lastWorkingDate).getTime()) / (1000 * 60 * 60 * 24)) > 0;
                 });
                 const mappedData = fnfDelayedData.map(r => ({
@@ -697,7 +708,7 @@ export function Overview() {
         <div className="flex-1 overflow-auto p-6">
           {(() => {
             const fnfDelayedData = mockNDCData.filter((r) => {
-              if (!r.fnfStatus || r.fnfStatus === "Done") return false;
+              if (r.ndcStage !== "NDC Completed" || r.isFnfCompleted) return false;
               return Math.ceil((new Date().getTime() - new Date(r.lastWorkingDate).getTime()) / (1000 * 60 * 60 * 24)) > 0;
             });
             const totalPages = Math.max(1, Math.ceil(fnfDelayedData.length / itemsPerPage));

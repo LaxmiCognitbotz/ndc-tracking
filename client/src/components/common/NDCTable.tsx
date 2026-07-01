@@ -47,6 +47,10 @@ const allColumns = [
   { key: "gccHrApprovalDate", label: "GCC HR Approval Date", sortable: false },
   { key: "finalAbexApprovalStatus", label: "Final Abex Approval", sortable: false },
   { key: "finalAbexApprovalDate", label: "Final Abex Approval Date", sortable: false },
+  { key: "businessSpecificApprovalStatus", label: "Business Specific Approval", sortable: false },
+  { key: "businessSpecificApprovalDate", label: "Business Specific Approval Date", sortable: false },
+  { key: "legatrixApprovalStatus", label: "Legatrix Approval", sortable: false },
+  { key: "legatrixApprovalDate", label: "Legatrix Approval Date", sortable: false },
   { key: "ndcCompletedDate", label: "NDC Completed", sortable: false },
 ];
 

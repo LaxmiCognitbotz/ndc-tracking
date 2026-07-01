@@ -38,10 +38,19 @@ export function FNFManagement() {
   const [currentPage, setCurrentPage] = useState(1);
   const [kpiCurrentPage, setKpiCurrentPage] = useState(1);
 
+  // F&F eligible = NDC Completed AND GCC HR Completed
+  const isEligible = (r: NDCRecord) =>
+    r.ndcStage === "NDC Completed" && r.gccHrApprovalStatus === "Completed";
+
+  const eligibleRecords = useMemo(() => mockNDCData.filter(isEligible), [mockNDCData]);
+
   const filteredData = useMemo(() => {
-    const activeRecords = mockNDCData.filter(r => r.fnfStatus && r.fnfStatus.trim() !== "");
-    let filtered = activeRecords;
-    if (statusFilter) filtered = filtered.filter((r) => r.fnfStatus === statusFilter);
+    let filtered = eligibleRecords;
+    if (statusFilter) {
+      if (statusFilter === "Done") filtered = filtered.filter((r) => r.isFnfCompleted);
+      else if (statusFilter === "Open") filtered = filtered.filter((r) => !r.isFnfCompleted && !r.isFnfRevision);
+      else if (statusFilter === "Revision Required") filtered = filtered.filter((r) => r.isFnfRevision);
+    }
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter(
@@ -49,7 +58,7 @@ export function FNFManagement() {
       );
     }
     return filtered;
-  }, [mockNDCData, statusFilter, searchQuery]);
+  }, [eligibleRecords, statusFilter, searchQuery]);
 
   const itemsPerPage = 10;
   const totalPages = Math.max(1, Math.ceil(filteredData.length / itemsPerPage));
@@ -61,35 +70,47 @@ export function FNFManagement() {
   const kpiPaginatedData = kpiModalData.data.slice(kpiStartIndex, kpiStartIndex + itemsPerPage);
 
   const fnfStats = useMemo(() => {
-    const activeRecords = mockNDCData.filter(r => r.fnfStatus && r.fnfStatus.trim() !== "");
-    const total = activeRecords.length;
-    const done = activeRecords.filter((r) => r.fnfStatus === "Done" || r.fnfStatus === "Completed").length;
-    const open = activeRecords.filter((r) => r.fnfStatus === "Open").length;
-    const revision = activeRecords.filter((r) => r.fnfStatus === "Revision Required").length;
-    const closed = activeRecords.filter((r) => r.ndcCompletedDate).length;
+    const total = eligibleRecords.length;
+    const done = eligibleRecords.filter((r) => r.isFnfCompleted).length;
+    const open = eligibleRecords.filter((r) => !r.isFnfCompleted && !r.isFnfRevision).length;
+    const revision = eligibleRecords.filter((r) => r.isFnfRevision).length;
+    const closed = done; // F&F Closed = F&F Completed
 
-    const closedRecords = activeRecords.filter((r) => r.ndcCompletedDate && r.lastWorkingDate);
-    const avgTAT = closedRecords.length > 0
+    // F&F TAT = fnfCompletedDate - gccInitiateDate
+    const tatRecords = eligibleRecords.filter((r) => r.isFnfCompleted && r.fnfCompletedDate && r.gccInitiateDate);
+    const avgTAT = tatRecords.length > 0
       ? Math.round(
-          closedRecords.reduce((sum, r) => {
-            const end = new Date(r.ndcCompletedDate);
-            const start = new Date(r.lastWorkingDate);
+          tatRecords.reduce((sum, r) => {
+            const end = new Date(r.fnfCompletedDate);
+            const start = new Date(r.gccInitiateDate);
             return sum + Math.abs((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
-          }, 0) / closedRecords.length
+          }, 0) / tatRecords.length
         )
       : 0;
 
     return { total, done, open, revision, closed, avgTAT };
-  }, [mockNDCData]);
+  }, [eligibleRecords]);
 
   const handleAction = (record: NDCRecord, action: "yes" | "no") => {
-    const newStatus = action === "yes" ? "Done" : "Revision Required";
-    axios.put(`/api/v1/ndc-records/${record.id}`, {
-      fnfStatus: newStatus
-    }).then(() => {
-      fetchData();
-      toast.success(`F&F status updated to ${newStatus} for ${record.employeeName} (${record.personNumber})`);
-    });
+    if (action === "yes") {
+      // Mark as F&F Completed
+      axios.put(`/api/v1/ndc-records/${record.id}`, {
+        is_fnf_completed: true,
+        fnf_document_count: 1,
+      }).then(() => {
+        fetchData();
+        toast.success(`F&F marked as Completed for ${record.employeeName} (${record.personNumber})`);
+      });
+    } else {
+      // Mark as Revision Required (multiple docs)
+      axios.put(`/api/v1/ndc-records/${record.id}`, {
+        is_fnf_revision: true,
+        fnf_document_count: 2,
+      }).then(() => {
+        fetchData();
+        toast.success(`F&F marked as Revision Required for ${record.employeeName} (${record.personNumber})`);
+      });
+    }
     setActionDialogOpen(false);
     setSelectedRecord(null);
   };
@@ -103,28 +124,27 @@ export function FNFManagement() {
   };
 
   const handleKPIClick = (type: "total" | "done" | "open" | "revision" | "closed" | "avgTAT") => {
-    const activeRecords = mockNDCData.filter(r => r.fnfStatus && r.fnfStatus.trim() !== "");
     const map: Record<string, { title: string; data: NDCRecord[] }> = {
-      total: { title: "Total F&F In Process", data: activeRecords },
-      done: { title: "F&F Completed", data: activeRecords.filter((r) => r.fnfStatus === "Done" || r.fnfStatus === "Completed") },
-      open: { title: "F&F Open", data: activeRecords.filter((r) => r.fnfStatus === "Open") },
-      revision: { title: "Revision Required", data: activeRecords.filter((r) => r.fnfStatus === "Revision Required") },
-      closed: { title: "F&F Closed", data: activeRecords.filter((r) => r.ndcCompletedDate) },
-      avgTAT: { title: "F&F TAT Records", data: activeRecords.filter((r) => r.ndcCompletedDate && r.lastWorkingDate) },
+      total: { title: "Total F&F In Process", data: eligibleRecords },
+      done: { title: "F&F Completed", data: eligibleRecords.filter((r) => r.isFnfCompleted) },
+      open: { title: "F&F Open", data: eligibleRecords.filter((r) => !r.isFnfCompleted && !r.isFnfRevision) },
+      revision: { title: "Revision Required", data: eligibleRecords.filter((r) => r.isFnfRevision) },
+      closed: { title: "F&F Closed", data: eligibleRecords.filter((r) => r.isFnfCompleted) },
+      avgTAT: { title: "F&F TAT Records", data: eligibleRecords.filter((r) => r.isFnfCompleted && r.fnfCompletedDate && r.gccInitiateDate) },
     };
     setKpiModalData(map[type]);
     setKpiCurrentPage(1);
     setKpiModalOpen(true);
   };
 
-  const getFNFStatusLabel = (status: string) => {
-    if (status === "Done" || status === "Completed") return "Completed";
-    return status;
+  const getFNFStatusLabel = (record: NDCRecord) => {
+    if (record.isFnfCompleted) return "Completed";
+    if (record.isFnfRevision) return "Revision Required";
+    return "Open";
   };
 
-  const getFNFStatusBadge = (status: string) => {
-    if (!status) return <span className="text-muted-foreground">Not started</span>;
-    const label = getFNFStatusLabel(status);
+  const getFNFStatusBadge = (record: NDCRecord) => {
+    const label = getFNFStatusLabel(record);
     const colorMap: Record<string, string> = {
       "Completed": "bg-green-50 text-green-700 border-green-200",
       "Open": "bg-blue-50 text-blue-700 border-blue-200",
@@ -154,20 +174,6 @@ export function FNFManagement() {
     
     await addImageSlide(pptx, "F&F KPI Summary", "section-fnf-kpis");
     
-    // const headers = ["Person Number", "Name", "Department", "Last Working Date", "F&F Status", "Delay Days"];
-    // const rows = filteredData.map(r => {
-    //    const delayDays = r.fnfStatus !== "Done" ? Math.max(0, Math.ceil((new Date().getTime() - new Date(r.lastWorkingDate).getTime()) / (1000 * 60 * 60 * 24))) : 0;
-    //    return [
-    //       r.personNumber,
-    //       r.employeeName,
-    //       r.department,
-    //       r.lastWorkingDate,
-    //       r.fnfStatus || "Pending",
-    //       delayDays + " days"
-    //    ];
-    // });
-    // 
-    // addTableSlide(pptx, "F&F Records Table", headers, rows);
     await pptx.writeFile({ fileName: "FnF_Management_Dashboard.pptx" });
   };
 
@@ -242,7 +248,9 @@ export function FNFManagement() {
                 "Employee name": r.employeeName,
                 "Department": r.department,
                 "Last working date": r.lastWorkingDate,
-                "F&F status": r.fnfStatus
+                "F&F status": getFNFStatusLabel(r),
+                "Doc count": r.fnfDocumentCount,
+                "F&F completed date": r.fnfCompletedDate,
               }));
               exportToExcel(mappedData, "FNF_Records");
             }}
@@ -272,7 +280,7 @@ export function FNFManagement() {
                   <td className="px-4 py-3 text-sm">{record.employeeName}</td>
                   <td className="px-4 py-3 text-sm">{record.department}</td>
                   <td className="px-4 py-3 text-sm">{record.lastWorkingDate}</td>
-                  <td className="px-4 py-3 text-sm">{getFNFStatusBadge(record.fnfStatus)}</td>
+                  <td className="px-4 py-3 text-sm">{getFNFStatusBadge(record)}</td>
                   <td className="px-4 py-3 text-sm">
                     <div className="flex gap-2 items-center">
                       <button
@@ -352,7 +360,7 @@ export function FNFManagement() {
                 "Department": r.department,
                 "Last working date": r.lastWorkingDate,
                 "NDC stage": r.ndcStage,
-                "F&F status": r.fnfStatus
+                "F&F status": getFNFStatusLabel(r)
               }));
               exportToExcel(mappedData, kpiModalData.title || "KPI_Records");
             }}
@@ -390,7 +398,7 @@ export function FNFManagement() {
                       <td className="px-4 py-3">{record.department}</td>
                       <td className="px-4 py-3 whitespace-nowrap">{record.lastWorkingDate}</td>
                       <td className="px-4 py-3 whitespace-nowrap">{record.ndcStage}</td>
-                      <td className="px-4 py-3">{getFNFStatusBadge(record.fnfStatus)}</td>
+                      <td className="px-4 py-3">{getFNFStatusBadge(record)}</td>
                     </tr>
                   ))}
                   {kpiModalData.data.length === 0 && (
@@ -446,21 +454,21 @@ export function FNFManagement() {
                 <p className="text-sm text-muted-foreground">Person number: {selectedRecord.personNumber}</p>
                 <p className="text-sm text-muted-foreground">Department: {selectedRecord.department}</p>
               </div>
-              <p className="text-sm">Is the F&amp;F document ready to be processed?</p>
+              <p className="text-sm">Have you found the F&amp;F document on the DMS Linkage Portal?</p>
               <div className="flex gap-3">
                 <button
                   onClick={() => handleAction(selectedRecord, "yes")}
                   className="flex-1 px-4 py-2 bg-green-600 text-white rounded-[4px] hover:bg-green-700 transition-colors flex items-center justify-center gap-2"
                 >
                   <CheckCircle className="w-4 h-4" />
-                  Closed
+                  Yes — 1 Document Found
                 </button>
                 <button
                   onClick={() => handleAction(selectedRecord, "no")}
                   className="flex-1 px-4 py-2 bg-red-600 text-white rounded-[4px] hover:bg-red-700 transition-colors flex items-center justify-center gap-2"
                 >
                   <XCircle className="w-4 h-4" />
-                  Needs revision
+                  Multiple Docs (Revision)
                 </button>
               </div>
             </div>
