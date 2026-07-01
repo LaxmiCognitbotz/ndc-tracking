@@ -48,8 +48,12 @@ export function FNFManagement() {
     let filtered = eligibleRecords;
     if (statusFilter) {
       if (statusFilter === "Done") filtered = filtered.filter((r) => r.isFnfCompleted);
+      else if (statusFilter === "Closed") filtered = filtered.filter((r) => r.isFnfClosed);
       else if (statusFilter === "Open") filtered = filtered.filter((r) => !r.isFnfCompleted && !r.isFnfRevision);
       else if (statusFilter === "Revision Required") filtered = filtered.filter((r) => r.isFnfRevision);
+    } else {
+      // By default (All statuses), exclude closed records from the list
+      filtered = filtered.filter((r) => !r.isFnfClosed);
     }
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
@@ -70,11 +74,11 @@ export function FNFManagement() {
   const kpiPaginatedData = kpiModalData.data.slice(kpiStartIndex, kpiStartIndex + itemsPerPage);
 
   const fnfStats = useMemo(() => {
-    const total = eligibleRecords.length;
+    const total = eligibleRecords.filter((r) => !r.isFnfClosed).length;
     const done = eligibleRecords.filter((r) => r.isFnfCompleted).length;
     const open = eligibleRecords.filter((r) => !r.isFnfCompleted && !r.isFnfRevision).length;
     const revision = eligibleRecords.filter((r) => r.isFnfRevision).length;
-    const closed = done; // F&F Closed = F&F Completed
+    const closed = eligibleRecords.filter((r) => r.isFnfClosed).length;
 
     // F&F TAT = fnfCompletedDate - gccInitiateDate
     const tatRecords = eligibleRecords.filter((r) => r.isFnfCompleted && r.fnfCompletedDate && r.gccInitiateDate);
@@ -91,20 +95,23 @@ export function FNFManagement() {
     return { total, done, open, revision, closed, avgTAT };
   }, [eligibleRecords]);
 
-  const handleAction = (record: NDCRecord, action: "yes" | "no") => {
-    if (action === "yes") {
-      // Mark as F&F Completed
+  const handleAction = (record: NDCRecord, action: "closed" | "revision") => {
+    if (action === "closed") {
+      // Mark as F&F Closed (which automatically completes it too)
       axios.put(`/api/v1/ndc-records/${record.id}`, {
+        is_fnf_closed: true,
         is_fnf_completed: true,
         fnf_document_count: 1,
       }).then(() => {
         fetchData();
-        toast.success(`F&F marked as Completed for ${record.employeeName} (${record.personNumber})`);
+        toast.success(`F&F marked as Closed and Completed for ${record.employeeName} (${record.personNumber})`);
       });
     } else {
       // Mark as Revision Required (multiple docs)
       axios.put(`/api/v1/ndc-records/${record.id}`, {
         is_fnf_revision: true,
+        is_fnf_closed: false,
+        is_fnf_completed: false,
         fnf_document_count: 2,
       }).then(() => {
         fetchData();
@@ -117,19 +124,19 @@ export function FNFManagement() {
 
   const handleDocumentView = (record: NDCRecord) => {
     if (record.fnfDocument) {
-      toast.info(`Opening document: ${record.fnfDocument}`);
+      window.open(`/api/v1/download-document/${record.fnfDocument}`, "_blank");
     } else {
       toast.error("No document available for this employee");
     }
   };
 
   const handleKPIClick = (type: "total" | "done" | "open" | "revision" | "closed" | "avgTAT") => {
-    const map: Record<string, { title: string; data: NDCRecord[] }> = {
-      total: { title: "Total F&F In Process", data: eligibleRecords },
+    const map = {
+      total: { title: "Total F&F In Process", data: eligibleRecords.filter((r) => !r.isFnfClosed) },
       done: { title: "F&F Completed", data: eligibleRecords.filter((r) => r.isFnfCompleted) },
       open: { title: "F&F Open", data: eligibleRecords.filter((r) => !r.isFnfCompleted && !r.isFnfRevision) },
       revision: { title: "Revision Required", data: eligibleRecords.filter((r) => r.isFnfRevision) },
-      closed: { title: "F&F Closed", data: eligibleRecords.filter((r) => r.isFnfCompleted) },
+      closed: { title: "F&F Closed", data: eligibleRecords.filter((r) => r.isFnfClosed) },
       avgTAT: { title: "F&F TAT Records", data: eligibleRecords.filter((r) => r.isFnfCompleted && r.fnfCompletedDate && r.gccInitiateDate) },
     };
     setKpiModalData(map[type]);
@@ -146,6 +153,7 @@ export function FNFManagement() {
   const getFNFStatusBadge = (record: NDCRecord) => {
     const label = getFNFStatusLabel(record);
     const colorMap: Record<string, string> = {
+      "Closed": "bg-teal-50 text-teal-700 border-teal-200",
       "Completed": "bg-green-50 text-green-700 border-green-200",
       "Open": "bg-blue-50 text-blue-700 border-blue-200",
       "Revision Required": "bg-red-50 text-red-700 border-red-200",
@@ -219,6 +227,7 @@ export function FNFManagement() {
               className="w-full px-3 py-2 border border-border rounded-[4px] bg-input-background focus:outline-none focus:ring-2 focus:ring-primary"
             >
               <option value="">All statuses</option>
+              <option value="Closed">Closed</option>
               <option value="Done">Completed</option>
               <option value="Open">Open</option>
               <option value="Revision Required">Revision Required</option>
@@ -443,32 +452,42 @@ export function FNFManagement() {
 
       {/* Confirmation Dialog */}
       <Dialog open={actionDialogOpen} onOpenChange={setActionDialogOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md p-6">
           <DialogHeader>
-            <DialogTitle>F&amp;F document confirmation</DialogTitle>
+            <DialogTitle className="text-xl font-semibold text-foreground">F&amp;F document confirmation</DialogTitle>
           </DialogHeader>
           {selectedRecord && (
-            <div className="p-4 space-y-4">
-              <div className="bg-muted p-4 rounded-[4px]">
-                <p className="text-sm font-medium">Employee: {selectedRecord.employeeName}</p>
-                <p className="text-sm text-muted-foreground">Person number: {selectedRecord.personNumber}</p>
-                <p className="text-sm text-muted-foreground">Department: {selectedRecord.department}</p>
+            <div className="space-y-6 pt-4">
+              <div className="bg-[#f8fafc] border border-slate-200 p-5 rounded-[6px] space-y-1.5">
+                <p className="text-sm text-slate-600">
+                  Employee: <span className="font-semibold text-slate-900">{selectedRecord.employeeName}</span>
+                </p>
+                <p className="text-sm text-slate-500">
+                  Person number: <span className="text-slate-700">{selectedRecord.personNumber}</span>
+                </p>
+                <p className="text-sm text-slate-500">
+                  Department: <span className="text-slate-700">{selectedRecord.department}</span>
+                </p>
               </div>
-              <p className="text-sm">Have you found the F&amp;F document on the DMS Linkage Portal?</p>
-              <div className="flex gap-3">
+              
+              <p className="text-base text-slate-900">
+                Is the F&amp;F document ready to be processed?
+              </p>
+              
+              <div className="flex gap-4">
                 <button
-                  onClick={() => handleAction(selectedRecord, "yes")}
-                  className="flex-1 px-4 py-2 bg-green-600 text-white rounded-[4px] hover:bg-green-700 transition-colors flex items-center justify-center gap-2"
+                  onClick={() => handleAction(selectedRecord, "closed")}
+                  className="flex-1 px-4 py-3 bg-[#00a651] text-white rounded-[6px] hover:bg-[#008f45] transition-colors flex items-center justify-center gap-2 font-semibold text-sm shadow-sm"
                 >
-                  <CheckCircle className="w-4 h-4" />
-                  Yes — 1 Document Found
+                  <CheckCircle className="w-5 h-5 shrink-0" />
+                  Closed
                 </button>
                 <button
-                  onClick={() => handleAction(selectedRecord, "no")}
-                  className="flex-1 px-4 py-2 bg-red-600 text-white rounded-[4px] hover:bg-red-700 transition-colors flex items-center justify-center gap-2"
+                  onClick={() => handleAction(selectedRecord, "revision")}
+                  className="flex-1 px-4 py-3 bg-[#e30613] text-white rounded-[6px] hover:bg-[#c2050f] transition-colors flex items-center justify-center gap-2 font-semibold text-sm shadow-sm"
                 >
-                  <XCircle className="w-4 h-4" />
-                  Multiple Docs (Revision)
+                  <XCircle className="w-5 h-5 shrink-0" />
+                  Needs revision
                 </button>
               </div>
             </div>
@@ -485,7 +504,7 @@ export function FNFManagement() {
           <div className="p-4 space-y-4">
             {mailRecord && (
               <p className="text-sm text-muted-foreground">
-                To: <span className="font-medium text-foreground">{mailRecord.employeeName}</span>
+                <strong>Employee Name:</strong> <span className="font-medium text-foreground">{mailRecord.employeeName}</span>
               </p>
             )}
             <div>
@@ -503,11 +522,28 @@ export function FNFManagement() {
             <div className="flex gap-3">
               <button
                 onClick={() => {
-                  if (!mailEmailTo) { toast.error("Please enter an email address"); return; }
-                  toast.success(`Email sent to ${mailEmailTo}`);
-                  setMailDialogOpen(false);
-                  setMailRecord(null);
-                  setMailEmailTo("");
+                  if (!mailRecord) return;
+                  if (!mailEmailTo) {
+                    toast.error("Please enter an email address");
+                    return;
+                  }
+                  const toastId = toast.loading(`Sending F&F details email to ${mailEmailTo}...`);
+                  axios.post("/api/v1/send-fnf-email", {
+                    email: mailEmailTo,
+                    record_id: parseInt(mailRecord.id)
+                  })
+                  .then(() => {
+                    toast.dismiss(toastId);
+                    toast.success(`Email sent successfully to ${mailEmailTo}`);
+                    setMailDialogOpen(false);
+                    setMailRecord(null);
+                    setMailEmailTo("");
+                  })
+                  .catch((err) => {
+                    toast.dismiss(toastId);
+                    const errMsg = err.response?.data?.detail || err.message || "Failed to send email";
+                    toast.error(errMsg);
+                  });
                 }}
                 className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-[4px] hover:bg-primary/90 transition-colors flex items-center justify-center gap-2"
               >

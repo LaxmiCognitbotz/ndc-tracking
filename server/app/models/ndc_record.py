@@ -28,6 +28,7 @@ class NdcRecord(Base):
     batch_id = Column(Integer)
     # F&F tracking columns
     is_fnf_completed = Column(Boolean, default=False, nullable=False, server_default="false")
+    is_fnf_closed = Column(Boolean, default=False, nullable=False, server_default="false")
     is_fnf_revision = Column(Boolean, default=False, nullable=False, server_default="false")
     fnf_completed_date = Column(Date, nullable=True)
     gcc_initiate_date = Column(Date, nullable=True)

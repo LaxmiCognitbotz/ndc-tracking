@@ -54,6 +54,7 @@ export interface NDCRecord {
   fnfActionDate: string;
   fnfCompletedDate: string;
   isFnfCompleted: boolean;
+  isFnfClosed: boolean;
   isFnfRevision: boolean;
   gccInitiateDate: string;
   fnfDocumentCount: number;

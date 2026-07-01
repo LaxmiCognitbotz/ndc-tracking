@@ -98,11 +98,13 @@ export function Analytics() {
   const fnfStatusBreakdownData = useMemo(() => {
     const activeRecords = mockNDCData.filter(r => r.fnfStatus && r.fnfStatus.trim() !== "");
     const total = activeRecords.length;
+    const closed = activeRecords.filter((r) => r.fnfStatus === "Closed").length;
     const done = activeRecords.filter((r) => r.fnfStatus === "Done" || r.fnfStatus === "Completed").length;
     const open = activeRecords.filter((r) => r.fnfStatus === "Open").length;
     const revision = activeRecords.filter((r) => r.fnfStatus === "Revision Required").length;
-    const notStarted = total - done - open - revision;
+    const notStarted = total - closed - done - open - revision;
     const entries = [
+      { name: "Closed", y: closed, color: "#0d9488" },
       { name: "Completed", y: done, color: "#10b981" },
       { name: "Open", y: open, color: "#3b82f6" },
       { name: "Revision Required", y: revision, color: "#ef4444" },

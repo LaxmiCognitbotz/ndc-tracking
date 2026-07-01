@@ -168,3 +168,188 @@ async def send_delayed_reminder(records: list[dict]) -> dict:
     except Exception as e:
         logger.exception("Failed to send reminder email: %s", e)
         return {"success": False, "message": f"Email failed: {e}"}
+
+
+async def send_fnf_details_email(email_to: str, record: dict) -> dict:
+    """
+    Send the F&F details of an employee to a specific email address,
+    attaching the F&F document file if available.
+    """
+    from email.mime.application import MIMEApplication
+
+    smtp_host = os.getenv("SMTP_HOST", "smtp.gmail.com")
+    smtp_port = int(os.getenv("SMTP_PORT", "587"))
+    smtp_user = os.getenv("SMTP_USER", "")
+    smtp_password = os.getenv("SMTP_PASSWORD", "")
+    smtp_from = os.getenv("SMTP_FROM", smtp_user)
+
+    if not smtp_user or not smtp_password:
+        msg = "SMTP credentials not configured"
+        logger.error(msg)
+        return {"success": False, "message": msg}
+
+    # Build simple, professional HTML template
+    html_body = f"""<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+  body {{
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    color: #334155;
+    background-color: #f8fafc;
+    padding: 30px 15px;
+    margin: 0;
+  }}
+  .container {{
+    max-width: 560px;
+    margin: 0 auto;
+    background: #ffffff;
+    border-radius: 8px;
+    border-top: 4px solid #0f766e;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+    overflow: hidden;
+    border-left: 1px solid #e2e8f0;
+    border-right: 1px solid #e2e8f0;
+    border-bottom: 1px solid #e2e8f0;
+  }}
+  .content {{
+    padding: 32px 24px;
+  }}
+  h2 {{
+    color: #0f766e;
+    font-size: 18px;
+    font-weight: 600;
+    margin-top: 0;
+    margin-bottom: 20px;
+    border-bottom: 1px solid #e2e8f0;
+    padding-bottom: 10px;
+  }}
+  p {{
+    margin: 0 0 16px;
+    font-size: 14px;
+    line-height: 1.6;
+    color: #475569;
+  }}
+  .details-table {{
+    width: 100%;
+    border-collapse: collapse;
+    margin: 20px 0;
+    font-size: 13.5px;
+  }}
+  .details-table td {{
+    padding: 10px 12px;
+    border-bottom: 1px solid #f1f5f9;
+  }}
+  .details-table tr:last-child td {{
+    border-bottom: none;
+  }}
+  .label {{
+    font-weight: 600;
+    color: #64748b;
+    width: 38%;
+  }}
+  .value {{
+    color: #0f172a;
+    font-weight: 500;
+  }}
+  .footer {{
+    background-color: #f8fafc;
+    padding: 20px 24px;
+    border-top: 1px solid #e2e8f0;
+    font-size: 12.5px;
+    color: #64748b;
+    line-height: 1.5;
+  }}
+  .footer strong {{
+    color: #475569;
+  }}
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="content">
+    <h2>Full &amp; Final Settlement Details</h2>
+    <p>Dear Recipient,</p>
+    <p>Please find below the Full &amp; Final (F&amp;F) settlement details for the employee clearance request:</p>
+    
+    <table class="details-table">
+      <tr>
+        <td class="label">Employee Name:</td>
+        <td class="value">{record.get('employee_name')}</td>
+      </tr>
+      <tr>
+        <td class="label">Person Number:</td>
+        <td class="value">{record.get('person_number')}</td>
+      </tr>
+      <tr>
+        <td class="label">Department:</td>
+        <td class="value">{record.get('department')}</td>
+      </tr>
+      <tr>
+        <td class="label">Resignation Date:</td>
+        <td class="value">{_fmt_date(record.get('resignation_date'))}</td>
+      </tr>
+      <tr>
+        <td class="label">Last Working Date:</td>
+        <td class="value">{_fmt_date(record.get('last_working_date'))}</td>
+      </tr>
+      <tr>
+        <td class="label">F&amp;F Status:</td>
+        <td class="value">{record.get('fnf_status')}</td>
+      </tr>
+      <tr>
+        <td class="label">Completed Date:</td>
+        <td class="value">{_fmt_date(record.get('fnf_completed_date'))}</td>
+      </tr>
+      <tr>
+        <td class="label">Document Count:</td>
+        <td class="value">{record.get('fnf_document_count', 0)}</td>
+      </tr>
+    </table>
+  </div>
+  <div class="footer">
+    Regards,<br>
+    <strong>NDC Monitoring System</strong>
+  </div>
+</div>
+</body>
+</html>"""
+
+    # Build MIMEMultipart message
+    msg = MIMEMultipart("mixed")
+    msg["Subject"] = f"F&F Settlement Details – {record.get('employee_name')} ({record.get('person_number')})"
+    msg["From"] = smtp_from
+    msg["To"] = email_to
+    
+    # Attach body
+    body_part = MIMEText(html_body, "html")
+    msg.attach(body_part)
+
+    # Attach F&F document if available
+    fnf_doc_name = record.get("fnf_document")
+    if fnf_doc_name:
+        from database import BASE_DIR
+        file_path = BASE_DIR / "uploads" / fnf_doc_name
+        if file_path.exists():
+            with open(file_path, "rb") as f:
+                attachment = MIMEApplication(f.read())
+            attachment.add_header('Content-Disposition', 'attachment', filename=fnf_doc_name)
+            msg.attach(attachment)
+            logger.info("Attached F&F document to email: %s", fnf_doc_name)
+
+    try:
+        with smtplib.SMTP(smtp_host, smtp_port, timeout=15) as server:
+            server.ehlo()
+            server.starttls()
+            server.login(smtp_user, smtp_password)
+            server.sendmail(smtp_from, [email_to], msg.as_string())
+
+        logger.info("F&F details email sent to %s for %s", email_to, record.get('employee_name'))
+        return {
+            "success": True,
+            "message": f"Email sent successfully to {email_to}.",
+        }
+    except Exception as e:
+        logger.exception("Failed to send F&F details email: %s", e)
+        return {"success": False, "message": f"Failed to send email: {e}"}

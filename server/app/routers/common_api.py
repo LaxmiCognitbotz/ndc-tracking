@@ -57,6 +57,16 @@ async def fetch_common_records(db: AsyncSession, start_date: Optional[date] = No
                     gcc_initiate = a.stage_started_at.date() if hasattr(a.stage_started_at, 'date') else a.stage_started_at
                     break
 
+        # Check if an F&F document file exists on the server in the uploads folder
+        from database import BASE_DIR
+        fnf_doc_name = ""
+        for ext in [".pdf", ".png", ".jpg", ".jpeg", ".docx", ".xlsx", ".xls"]:
+            possible_file = f"{record.person_number}{ext}"
+            possible_path = BASE_DIR / "uploads" / possible_file
+            if possible_path.exists():
+                fnf_doc_name = possible_file
+                break
+
         item = {
             "id": str(record.id),
             "ndc_assigned_date": record.ndc_assigned_date.strftime("%Y-%m-%d") if record.ndc_assigned_date else "",
@@ -71,10 +81,11 @@ async def fetch_common_records(db: AsyncSession, start_date: Optional[date] = No
             "created_by": record.created_by or "",
             # F&F fields — derive fnf_status from booleans for backward compat
             "fnf_status": _derive_fnf_status(record),
-            "fnf_document": "",
+            "fnf_document": fnf_doc_name,
             "fnf_action_date": "",
             "fnf_completed_date": record.fnf_completed_date.strftime("%Y-%m-%d") if record.fnf_completed_date else "",
             "is_fnf_completed": record.is_fnf_completed,
+            "is_fnf_closed": record.is_fnf_closed,
             "is_fnf_revision": record.is_fnf_revision,
             "gcc_initiate_date": gcc_initiate.strftime("%Y-%m-%d") if gcc_initiate else "",
             "fnf_document_count": record.fnf_document_count,
@@ -106,10 +117,10 @@ async def fetch_common_records(db: AsyncSession, start_date: Optional[date] = No
 
 def _derive_fnf_status(record: NdcRecord) -> str:
     """Derive a string F&F status from boolean fields for backward compatibility."""
-    if record.is_fnf_revision:
-        return "Revision Required"
     if record.is_fnf_completed:
         return "Done"
+    if record.is_fnf_revision:
+        return "Revision Required"
     # Eligible = NDC Completed AND GCC HR Completed (check ndc_stage only; GCC status checked separately)
     if record.ndc_stage == "NDC Completed":
         return "Open"
@@ -137,6 +148,7 @@ async def get_all_analytics_records_for_common(db: AsyncSession = Depends(get_db
 
 class FnfUpdateRequest(BaseModel):
     is_fnf_completed: Optional[bool] = None
+    is_fnf_closed: Optional[bool] = None
     is_fnf_revision: Optional[bool] = None
     fnf_document_count: Optional[int] = None
 
@@ -155,22 +167,36 @@ async def update_fnf_status(
 
     today = date.today()
 
+    if body.is_fnf_closed is not None:
+        record.is_fnf_closed = body.is_fnf_closed
+        if body.is_fnf_closed:
+            record.is_fnf_completed = True
+            if not record.fnf_completed_date:
+                record.fnf_completed_date = today
+            # Clear revision flag if marking closed
+            record.is_fnf_revision = False
+            # Propagate department dates
+            await _propagate_department_dates(record.id, today, db)
+
     if body.is_fnf_completed is not None:
         record.is_fnf_completed = body.is_fnf_completed
         if body.is_fnf_completed:
-            record.fnf_completed_date = today
+            if not record.fnf_completed_date:
+                record.fnf_completed_date = today
             # Clear revision flag if marking completed
             record.is_fnf_revision = False
             # Propagate department dates
             await _propagate_department_dates(record.id, today, db)
         else:
             record.fnf_completed_date = None
+            record.is_fnf_closed = False
 
     if body.is_fnf_revision is not None:
         record.is_fnf_revision = body.is_fnf_revision
         if body.is_fnf_revision:
-            # Clear completed flag if marking revision
+            # Clear completed and closed flags if marking revision
             record.is_fnf_completed = False
+            record.is_fnf_closed = False
             record.fnf_completed_date = None
 
     if body.fnf_document_count is not None:
@@ -191,3 +217,16 @@ async def _propagate_department_dates(record_id: int, fnf_completed_date: date, 
         date_blank = approval.stage_completed_at is None
         if status_blank and date_blank:
             approval.stage_completed_at = fnf_completed_date
+
+
+from fastapi.responses import FileResponse
+import os
+
+@router.get("/download-document/{filename}")
+async def download_document(filename: str):
+    from database import BASE_DIR
+    clean_filename = os.path.basename(filename)
+    file_path = BASE_DIR / "uploads" / clean_filename
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="File not found")
+    return FileResponse(file_path, filename=clean_filename)

@@ -62,6 +62,7 @@ class CommonNDCRecord(BaseModel):
     fnf_action_date: str
     fnf_completed_date: str
     is_fnf_completed: bool = False
+    is_fnf_closed: bool = False
     is_fnf_revision: bool = False
     gcc_initiate_date: str = ""
     fnf_document_count: int = 0

@@ -95,6 +95,7 @@ export function NDCTable({
     if (columnKey === "fnfStatus") {
       if (!value) return <span className="text-muted-foreground">-</span>;
       const colorMap: Record<string, string> = {
+        "Closed": "text-teal-600 bg-teal-50 px-2 py-1 rounded-[4px]",
         "Done": "text-green-600 bg-green-50 px-2 py-1 rounded-[4px]",
         "Open": "text-blue-600 bg-blue-50 px-2 py-1 rounded-[4px]",
         "Revision Required": "text-red-600 bg-red-50 px-2 py-1 rounded-[4px]",

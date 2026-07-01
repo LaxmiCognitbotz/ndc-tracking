@@ -137,3 +137,99 @@ async def send_delayed_reminder_email(
         raise HTTPException(status_code=500, detail=outcome["message"])
 
     return {"status": "success", "message": outcome["message"], "records_sent": len(top10)}
+
+
+from app.models.ndc_approval import NdcApproval
+from app.routers.common_api import _derive_fnf_status
+from app.services.email_service import send_fnf_details_email
+
+class FnfEmailRequest(BaseModel):
+    email: str
+    record_id: int
+
+@router.post("/send-fnf-email")
+async def send_fnf_email(
+    payload: FnfEmailRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    # Fetch the record
+    result = await db.execute(
+        select(NdcRecord).where(NdcRecord.id == payload.record_id)
+    )
+    record = result.scalar_one_or_none()
+    if not record:
+        raise HTTPException(status_code=404, detail="Record not found")
+
+    # Fetch record approvals
+    approvals_res = await db.execute(
+        select(NdcApproval).where(NdcApproval.ndc_record_id == record.id)
+    )
+    record_approvals = approvals_res.scalars().all()
+
+    stage_key_map = {
+        "RM Approval": "rm",
+        "IT Approval": "it",
+        "ABEX Approval": "abex",
+        "Telecom Approval": "telecom",
+        "Store Approval": "store",
+        "Safety Approval": "safety",
+        "Administration Approval": "administration",
+        "Security Approval": "security",
+        "HR Approval": "hr",
+        "GCC HR Approval": "gcc_hr",
+        "Final ABEX Approval": "final_abex",
+        "Business Specific Approval": "business_specific",
+        "Legatrix Approval": "legatrix",
+    }
+
+    # Check if an F&F document file exists on the server in the uploads folder
+    from database import BASE_DIR
+    fnf_doc_name = ""
+    for ext in [".pdf", ".png", ".jpg", ".jpeg", ".docx", ".xlsx", ".xls"]:
+        possible_file = f"{record.person_number}{ext}"
+        possible_path = BASE_DIR / "uploads" / possible_file
+        if possible_path.exists():
+            fnf_doc_name = possible_file
+            break
+
+    # Base record fields
+    record_dict = {
+        "person_number": str(record.person_number),
+        "employee_name": record.employee_name or "",
+        "department": record.department or record.department_reporting_name or "—",
+        "resignation_date": record.resignation_date,
+        "last_working_date": record.last_working_date,
+        "fnf_status": _derive_fnf_status(record),
+        "fnf_completed_date": record.fnf_completed_date,
+        "fnf_document_count": record.fnf_document_count,
+        "fnf_document": fnf_doc_name,
+    }
+
+    # Initialize approvals with default
+    for prefix in stage_key_map.values():
+        record_dict[f"{prefix}_approval_status"] = "Not Applicable"
+        record_dict[f"{prefix}_approval_date"] = ""
+
+    # Populate approvals
+    for approval in record_approvals:
+        prefix = stage_key_map.get(approval.stage_name)
+        if prefix:
+            status_mapped = ""
+            if approval.status == "PENDING": status_mapped = "Pending"
+            elif approval.status == "IN_PROGRESS": status_mapped = "In Progress"
+            elif approval.status == "COMPLETED": status_mapped = "Completed"
+            elif approval.status == "NOT_APPLICABLE": status_mapped = "Not Applicable"
+            else: status_mapped = approval.status.capitalize() if approval.status else "Not Applicable"
+
+            record_dict[f"{prefix}_approval_status"] = status_mapped
+            record_dict[f"{prefix}_approval_date"] = approval.stage_completed_at.strftime("%Y-%m-%d") if approval.stage_completed_at else ""
+
+    outcome = await send_fnf_details_email(
+        email_to=payload.email.strip(),
+        record=record_dict
+    )
+
+    if not outcome["success"]:
+        raise HTTPException(status_code=500, detail=outcome["message"])
+
+    return {"status": "success", "message": outcome["message"]}

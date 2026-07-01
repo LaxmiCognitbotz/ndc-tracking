@@ -246,6 +246,7 @@ export function Overview() {
       return days > 0;
     }).length;
 
+    const closedFnfClosed = closedCases.filter((r) => r.isFnfClosed).length;
     const closedFnfDone = closedCases.filter((r) => r.isFnfCompleted).length;
     const closedFnfOpen = closedCases.filter((r) => !r.isFnfCompleted && !r.isFnfRevision).length;
     const closedFnfRevision = closedCases.filter((r) => r.isFnfRevision).length;
@@ -268,7 +269,7 @@ export function Overview() {
     return {
       totalNDC, openNDC, closedNDC, recoveryPending, ndcPendingGCC,
       delayed7to30, delayedOver30, totalDelayed, fnfDelayed,
-      closedFnfDone, closedFnfOpen, closedFnfRevision,
+      closedFnfClosed, closedFnfDone, closedFnfOpen, closedFnfRevision,
       inProgress, pendingApproval, overdue, avgCompletionDays,
     };
   }, [mockNDCData]);
@@ -581,8 +582,9 @@ export function Overview() {
             <DialogTitle>Closed NDC Categories</DialogTitle>
           </DialogHeader>
           <div className="p-4">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
               {[
+                { label: "F&F Closed", key: "Closed", count: kpis.closedFnfClosed, icon: CheckCircle, color: "text-teal-600", iconColor: "text-teal-600" },
                 { label: "F&F Completed", key: "Done", count: kpis.closedFnfDone, icon: CheckCircle, color: "text-green-600", iconColor: "text-green-600" },
                 { label: "F&F Open", key: "Open", count: kpis.closedFnfOpen, icon: FolderOpen, color: "text-blue-600", iconColor: "text-blue-600" },
                 { label: "F&F Revision Required", key: "Revision Required", count: kpis.closedFnfRevision, icon: AlertCircle, color: "text-red-600", iconColor: "text-red-600" },
@@ -592,7 +594,9 @@ export function Overview() {
                   onClick={() => {
                     setClosedNDCModalOpen(false);
                     const closedCases = mockNDCData.filter((r) => r.ndcStage === "NDC Completed");
-                    if (key === "Done") {
+                    if (key === "Closed") {
+                      setModalData({ title: label, data: closedCases.filter((r) => r.isFnfClosed) });
+                    } else if (key === "Done") {
                       setModalData({ title: label, data: closedCases.filter((r) => r.isFnfCompleted) });
                     } else if (key === "Open") {
                       setModalData({ title: label, data: closedCases.filter((r) => !r.isFnfCompleted && !r.isFnfRevision) });
@@ -601,13 +605,13 @@ export function Overview() {
                     }
                     setModalOpen(true);
                   }}
-                  className="cursor-pointer p-6 bg-card border border-border rounded-[4px] hover:bg-muted/50 transition-colors"
+                  className="cursor-pointer p-5 bg-card border border-border rounded-[4px] hover:bg-muted/50 transition-colors"
                 >
                   <div className="flex items-start justify-between mb-3 gap-2">
                     <span className="text-sm font-semibold text-foreground leading-tight">{label}</span>
                     <Icon className={`w-5 h-5 flex-shrink-0 ${iconColor}`} />
                   </div>
-                  <p className={`text-4xl font-bold ${color}`}>{count}</p>
+                  <p className={`text-3xl font-bold ${color}`}>{count}</p>
                 </div>
               ))}
             </div>
