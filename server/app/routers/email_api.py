@@ -36,13 +36,44 @@ async def get_email_recipients(db: AsyncSession = Depends(get_db)):
 
 @router.post("/email-recipients")
 async def add_email_recipient(recipient: EmailRecipientSchema, db: AsyncSession = Depends(get_db)):
+    # Duplicate email check
+    existing = await db.execute(
+        select(EmailRecipient).where(EmailRecipient.email == recipient.email.strip().lower())
+    )
+    if existing.scalar_one_or_none():
+        raise HTTPException(status_code=409, detail="A recipient with this email already exists.")
+
     new_rec = EmailRecipient(
         name=recipient.name,
-        email=recipient.email,
+        email=recipient.email.strip().lower(),
         department=recipient.department,
         role=recipient.role
     )
     db.add(new_rec)
+    await db.commit()
+    return {"status": "success"}
+
+@router.put("/email-recipients/{id}")
+async def update_email_recipient(id: int, recipient: EmailRecipientSchema, db: AsyncSession = Depends(get_db)):
+    res = await db.execute(select(EmailRecipient).where(EmailRecipient.id == id))
+    rec = res.scalar_one_or_none()
+    if not rec:
+        raise HTTPException(status_code=404, detail="Not found")
+
+    # Duplicate email check – exclude the current record from the check
+    dup = await db.execute(
+        select(EmailRecipient).where(
+            EmailRecipient.email == recipient.email.strip().lower(),
+            EmailRecipient.id != id
+        )
+    )
+    if dup.scalar_one_or_none():
+        raise HTTPException(status_code=409, detail="Another recipient with this email already exists.")
+
+    rec.name = recipient.name
+    rec.email = recipient.email.strip().lower()
+    rec.department = recipient.department
+    rec.role = recipient.role
     await db.commit()
     return {"status": "success"}
 

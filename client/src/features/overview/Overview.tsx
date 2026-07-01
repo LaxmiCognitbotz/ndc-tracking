@@ -15,6 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../../componen
 import { Popover, PopoverContent, PopoverTrigger } from "../../components/ui/popover";
 import { Calendar } from "../../components/ui/calendar";
 import { format } from "date-fns";
+import { type DateRange } from "react-day-picker";
 import {
   Users,
   ChevronLeft,
@@ -39,14 +40,6 @@ export function Overview() {
   const [mockNDCData, setMockNDCData] = useState<NDCRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    axios.get("/api/v1/ndc-records").then((res) => {
-      const data = res.data?.data || res.data;
-      setMockNDCData(Array.isArray(data) ? data : []);
-      setIsLoading(false);
-    });
-  }, []);
-
   const [ndcStageFilter, setNdcStageFilter] = useState("");
   const [approvalDepartmentFilter, setApprovalDepartmentFilter] = useState("");
   const [approvalStatusFilter, setApprovalStatusFilter] = useState("");
@@ -65,11 +58,56 @@ export function Overview() {
   const [inProgressModalOpen, setInProgressModalOpen] = useState(false);
   const [pendingApprovalModalOpen, setPendingApprovalModalOpen] = useState(false);
   const [overdueModalOpen, setOverdueModalOpen] = useState(false);
-  const [historicalDate, setHistoricalDate] = useState<Date>();
+  
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
+  const [appliedDateRange, setAppliedDateRange] = useState<DateRange | undefined>(undefined);
+  const [popoverOpen, setPopoverOpen] = useState(false);
+  
+  const [monthLeft, setMonthLeft] = useState<Date>(new Date());
+  const [monthRight, setMonthRight] = useState<Date>(() => {
+    const d = new Date();
+    d.setDate(1);
+    d.setMonth(d.getMonth() + 1);
+    return d;
+  });
+
+  const handleMonthLeftChange = (newMonth: Date) => {
+    setMonthLeft(newMonth);
+    if (newMonth.getTime() >= monthRight.getTime()) {
+      const next = new Date(newMonth);
+      next.setMonth(next.getMonth() + 1);
+      setMonthRight(next);
+    }
+  };
+
+  const handleMonthRightChange = (newMonth: Date) => {
+    setMonthRight(newMonth);
+    if (newMonth.getTime() <= monthLeft.getTime()) {
+      const prev = new Date(newMonth);
+      prev.setMonth(prev.getMonth() - 1);
+      setMonthLeft(prev);
+    }
+  };
+
   const [ndcDelayedCurrentPage, setNdcDelayedCurrentPage] = useState(1);
   const [fnfDelayedCurrentPage, setFnfDelayedCurrentPage] = useState(1);
   const [sendingReminder, setSendingReminder] = useState(false);
   const itemsPerPage = 10;
+
+  useEffect(() => {
+    setIsLoading(true);
+    let url = "/api/v1/ndc-records";
+    if (appliedDateRange?.from) {
+      const startStr = format(appliedDateRange.from, "yyyy-MM-dd");
+      const endStr = appliedDateRange.to ? format(appliedDateRange.to, "yyyy-MM-dd") : startStr;
+      url += `?start_date=${startStr}&end_date=${endStr}`;
+    }
+    axios.get(url).then((res) => {
+      const data = res.data?.data || res.data;
+      setMockNDCData(Array.isArray(data) ? data : []);
+      setIsLoading(false);
+    }).catch(() => setIsLoading(false));
+  }, [appliedDateRange]);
 
   const ndcStages = useMemo(() => {
     return Array.from(new Set(mockNDCData.map((record) => record.ndcStage))).sort();
@@ -168,6 +206,7 @@ export function Overview() {
         (r) => r.employeeName.toLowerCase().includes(query) || r.personNumber.toLowerCase().includes(query)
       );
     }
+    // Date filter removed from here because API handles it
     return filtered;
   }, [mockNDCData, ndcStageFilter, approvalDepartmentFilter, approvalStatusFilter, searchQuery]);
 
@@ -360,15 +399,82 @@ export function Overview() {
         </div>
         <div className="flex items-center gap-3">
           <PPTDownloadButton onDownload={handleDownloadPPT} />
-          <Popover>
+          <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
             <PopoverTrigger asChild>
-              <button className="flex items-center gap-2 px-4 py-2 bg-card border border-border rounded-[4px] hover:bg-muted transition-colors">
-                <CalendarIcon className="w-4 h-4" />
-                {historicalDate ? format(historicalDate, "PPP") : "Select Date"}
+              <button className="flex items-center gap-2 px-4 py-2 bg-card border border-border rounded-[4px] hover:bg-muted transition-colors text-sm font-medium whitespace-nowrap">
+                <CalendarIcon className="w-4 h-4 text-muted-foreground shrink-0" />
+                <span>
+                  {appliedDateRange?.from
+                    ? appliedDateRange.to
+                      ? `${format(appliedDateRange.from, "dd MMM yyyy")} – ${format(appliedDateRange.to, "dd MMM yyyy")}`
+                      : format(appliedDateRange.from, "dd MMM yyyy")
+                    : "Select Date Range"}
+                </span>
+                {appliedDateRange?.from && (
+                  <span
+                    role="button"
+                    onClick={(e) => { e.stopPropagation(); setDateRange(undefined); setAppliedDateRange(undefined); }}
+                    className="ml-1 text-muted-foreground hover:text-foreground cursor-pointer"
+                  >
+                    ✕
+                  </span>
+                )}
               </button>
             </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="end">
-              <Calendar mode="single" selected={historicalDate} onSelect={setHistoricalDate} initialFocus />
+            <PopoverContent className="w-auto p-0" align="end" sideOffset={8}>
+              <div className="flex">
+                {/* ─── Calendar ─── */}
+                <div className="flex flex-col">
+                  <div className="px-3 py-2 border-b border-border bg-muted/10 flex items-center justify-between">
+                    <span className="text-xs font-semibold text-muted-foreground">Select Date Range</span>
+                    {dateRange?.from && (
+                      <button
+                        onClick={() => { setDateRange(undefined); setAppliedDateRange(undefined); }}
+                        className="text-xs text-red-500 hover:text-red-700 font-semibold cursor-pointer"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex">
+                    <Calendar
+                      mode="range"
+                      month={monthLeft}
+                      onMonthChange={handleMonthLeftChange}
+                      selected={dateRange}
+                      onSelect={setDateRange}
+                      numberOfMonths={1}
+                      showOutsideDays={false}
+                      captionLayout="dropdown-buttons"
+                      fromYear={2020}
+                      toYear={new Date().getFullYear() + 3}
+                    />
+                    <Calendar
+                      mode="range"
+                      month={monthRight}
+                      onMonthChange={handleMonthRightChange}
+                      selected={dateRange}
+                      onSelect={setDateRange}
+                      numberOfMonths={1}
+                      showOutsideDays={false}
+                      captionLayout="dropdown-buttons"
+                      fromYear={2020}
+                      toYear={new Date().getFullYear() + 3}
+                    />
+                  </div>
+                  <div className="px-3 py-2 border-t border-border bg-muted/10 flex justify-end">
+                    <button
+                      onClick={() => {
+                        setAppliedDateRange(dateRange);
+                        setPopoverOpen(false);
+                      }}
+                      className="px-4 py-1.5 bg-primary text-primary-foreground text-xs font-semibold rounded hover:bg-primary/90 transition-colors"
+                    >
+                      Apply Filter
+                    </button>
+                  </div>
+                </div>
+              </div>
             </PopoverContent>
           </Popover>
           <button

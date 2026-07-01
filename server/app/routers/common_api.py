@@ -1,6 +1,6 @@
 from datetime import date
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,9 +13,16 @@ from app.schemas.common import CommonNDCRecord
 
 router = APIRouter(prefix="/api/v1", tags=["common"])
 
-async def fetch_common_records(db: AsyncSession) -> List[CommonNDCRecord]:
+async def fetch_common_records(db: AsyncSession, start_date: Optional[date] = None, end_date: Optional[date] = None) -> List[CommonNDCRecord]:
     # Fetch all records and approvals.
-    records_res = await db.execute(select(NdcRecord).order_by(NdcRecord.ndc_initiated_date.desc()))
+    stmt = select(NdcRecord)
+    if start_date:
+        stmt = stmt.where(NdcRecord.last_working_date >= start_date)
+    if end_date:
+        stmt = stmt.where(NdcRecord.last_working_date <= end_date)
+    
+    stmt = stmt.order_by(NdcRecord.ndc_initiated_date.desc())
+    records_res = await db.execute(stmt)
     records = records_res.scalars().all()
     
     approvals_res = await db.execute(select(NdcApproval))
@@ -110,8 +117,12 @@ def _derive_fnf_status(record: NdcRecord) -> str:
 
 
 @router.get("/ndc-records", response_model=List[CommonNDCRecord])
-async def get_all_ndc_records_for_common(db: AsyncSession = Depends(get_db)):
-    return await fetch_common_records(db)
+async def get_all_ndc_records_for_common(
+    db: AsyncSession = Depends(get_db),
+    start_date: Optional[date] = Query(None),
+    end_date: Optional[date] = Query(None)
+):
+    return await fetch_common_records(db, start_date, end_date)
 
 @router.get("/fnf-records", response_model=List[CommonNDCRecord])
 async def get_all_fnf_records_for_common(db: AsyncSession = Depends(get_db)):
