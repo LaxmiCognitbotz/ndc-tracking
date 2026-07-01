@@ -1,5 +1,5 @@
 from sqlalchemy import (
-    Column, Integer, BigInteger, String, Date, DateTime, CheckConstraint, Index,
+    Column, Integer, BigInteger, String, Date, DateTime, Boolean, CheckConstraint, Index,
     func,
 )
 from app.models import Base
@@ -26,6 +26,28 @@ class NdcRecord(Base):
     created_by = Column(String(200))
     source_file = Column(String(500))
     batch_id = Column(Integer)
+    # F&F tracking columns
+    is_fnf_completed = Column(Boolean, default=False, nullable=False, server_default="false")
+    is_fnf_revision = Column(Boolean, default=False, nullable=False, server_default="false")
+    fnf_completed_date = Column(Date, nullable=True)
+    gcc_initiate_date = Column(Date, nullable=True)
+    fnf_document_count = Column(Integer, default=0, nullable=False, server_default="0")
+
+    # Department Approval Dates
+    rm_approval_date = Column(Date, nullable=True)
+    it_approval_date = Column(Date, nullable=True)
+    abex_approval_date = Column(Date, nullable=True)
+    telecom_approval_date = Column(Date, nullable=True)
+    store_approval_date = Column(Date, nullable=True)
+    safety_approval_date = Column(Date, nullable=True)
+    administration_approval_date = Column(Date, nullable=True)
+    security_approval_date = Column(Date, nullable=True)
+    hr_approval_date = Column(Date, nullable=True)
+    gcc_hr_approval_date = Column(Date, nullable=True)
+    final_abex_approval_date = Column(Date, nullable=True)
+    business_specific_approval_date = Column(Date, nullable=True)
+    legatrix_approval_date = Column(Date, nullable=True)
+
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 

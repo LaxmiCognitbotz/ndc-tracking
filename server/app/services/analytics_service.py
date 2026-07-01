@@ -221,21 +221,39 @@ async def get_open_ndc_breakdown(db: AsyncSession) -> dict:
 
 
 async def get_closed_ndc_breakdown(db: AsyncSession) -> dict:
-    """Get breakdown of closed NDC categories.
-    
-    Note: These categories require additional fields in NdcRecord model
-    to track F&F status. For now, assuming all completed are 'F&F done'.
-    """
-    completed_q = await db.execute(
+    """Get breakdown of closed NDC categories using F&F boolean fields."""
+    # F&F Completed: NDC Completed AND is_fnf_completed = true
+    ff_done_q = await db.execute(
         select(func.count()).select_from(NdcRecord)
-        .where(NdcRecord.ndc_stage == "NDC Completed")
+        .where(
+            NdcRecord.ndc_stage == "NDC Completed",
+            NdcRecord.is_fnf_completed == True,
+        )
     )
-    ff_done = completed_q.scalar() or 0
-    
+    ff_done = ff_done_q.scalar() or 0
+
+    # F&F Open: NDC Completed AND not completed AND not revision
+    ff_open_q = await db.execute(
+        select(func.count()).select_from(NdcRecord)
+        .where(
+            NdcRecord.ndc_stage == "NDC Completed",
+            NdcRecord.is_fnf_completed == False,
+            NdcRecord.is_fnf_revision == False,
+        )
+    )
+    ff_open = ff_open_q.scalar() or 0
+
+    # F&F Revision Required: is_fnf_revision = true
+    ff_revision_q = await db.execute(
+        select(func.count()).select_from(NdcRecord)
+        .where(NdcRecord.is_fnf_revision == True)
+    )
+    ff_revision = ff_revision_q.scalar() or 0
+
     return {
         "ff_done": ff_done,
-        "ff_open": 0,
-        "ff_revision_required": 0,
+        "ff_open": ff_open,
+        "ff_revision_required": ff_revision,
     }
 
 
@@ -243,20 +261,28 @@ async def get_delayed_cases_breakdown(db: AsyncSession) -> dict:
     """Get breakdown of delayed cases."""
     today = date.today()
     
-    # NDC delay cases - NDC records overdue
+    # NDC delay cases - NDC not completed and past LWD + 30 days
     ndc_delay_q = await db.execute(
         select(func.count()).select_from(NdcRecord)
         .where(
-            (NdcRecord.ndc_initiated_date.isnot(None)) &
-            (NdcRecord.ndc_completed_date.isnot(None)) &
-            (NdcRecord.ndc_stage == "NDC Completed")
+            NdcRecord.ndc_stage != "NDC Completed",
+            NdcRecord.last_working_date.isnot(None),
+            NdcRecord.last_working_date < today,
         )
     )
     ndc_delay_cases = ndc_delay_q.scalar() or 0
     
-    # F&F delay cases - using same logic as NDC delay for now
-    # In a real scenario, you'd have separate F&F tracking
-    ff_delay_cases = ndc_delay_cases - (ndc_delay_cases // 2)  # Approximate split
+    # F&F delay cases - NDC completed but F&F not completed and past LWD
+    ff_delay_q = await db.execute(
+        select(func.count()).select_from(NdcRecord)
+        .where(
+            NdcRecord.ndc_stage == "NDC Completed",
+            NdcRecord.is_fnf_completed == False,
+            NdcRecord.last_working_date.isnot(None),
+            NdcRecord.last_working_date < today,
+        )
+    )
+    ff_delay_cases = ff_delay_q.scalar() or 0
     
     return {
         "ndc_delay_cases": ndc_delay_cases,

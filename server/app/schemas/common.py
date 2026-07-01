@@ -49,12 +49,22 @@ class CommonNDCRecord(BaseModel):
     final_abex_approval_status: str
     final_abex_approver: str
     final_abex_approval_date: str
+    business_specific_approval_status: str = "Not Applicable"
+    business_specific_approver: str = ""
+    business_specific_approval_date: str = ""
+    legatrix_approval_status: str = "Not Applicable"
+    legatrix_approver: str = ""
+    legatrix_approval_date: str = ""
     ndc_completed_date: str
     created_by: str
     fnf_status: str
     fnf_document: str
     fnf_action_date: str
     fnf_completed_date: str
+    is_fnf_completed: bool = False
+    is_fnf_revision: bool = False
+    gcc_initiate_date: str = ""
+    fnf_document_count: int = 0
     recovery_pending_dept: str
     recovery_amount: float
     recovery_status: str

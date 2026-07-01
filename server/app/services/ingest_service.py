@@ -1,6 +1,7 @@
 """Ingest service — validate, normalize, upsert NDC records from parsed Excel rows."""
 
 import logging
+from datetime import date
 from pathlib import Path
 
 from sqlalchemy import select, delete
@@ -133,15 +134,29 @@ async def ingest_excel_file(
             }
 
             if record:
+                # Preserve F&F fields that are manually set — don't overwrite them
+                preserved_fields = {
+                    "is_fnf_completed", "is_fnf_revision", "fnf_completed_date",
+                    "gcc_initiate_date", "fnf_document_count",
+                }
                 for key, value in record_data.items():
-                    setattr(record, key, value)
+                    if key not in preserved_fields:
+                        setattr(record, key, value)
             else:
                 record = NdcRecord(**record_data)
                 db.add(record)
 
             await db.flush()
 
-            # Delete existing approvals, then reinsert
+            # Build a map of existing approvals for date preservation
+            existing_approvals_res = await db.execute(
+                select(NdcApproval).where(NdcApproval.ndc_record_id == record.id)
+            )
+            existing_approvals_map = {
+                a.stage_name: a for a in existing_approvals_res.scalars().all()
+            }
+
+            # Delete existing approvals, then reinsert with preserved dates
             await db.execute(
                 delete(NdcApproval).where(NdcApproval.ndc_record_id == record.id)
             )
@@ -149,14 +164,63 @@ async def ingest_excel_file(
             for stage_key, type_col, status_col, order in APPROVAL_STAGES:
                 raw_status = row.get(status_col)
                 approver = row.get(type_col)
+                new_status = normalize_status(raw_status) if raw_status else None
+
+                existing = existing_approvals_map.get(stage_key)
+                today_date = date.today()
+
+                # --- stage_completed_at logic ---
+                # 1. If existing date exists and status is still COMPLETED → preserve it
+                # 2. If new status is COMPLETED but no existing date → auto-stamp today
+                # 3. If status changed away from COMPLETED → clear the date
+                preserved_date = None
+                if existing and existing.stage_completed_at:
+                    if new_status == "COMPLETED":
+                        preserved_date = existing.stage_completed_at  # keep existing date
+                    # else: status changed away from COMPLETED, date is cleared
+                elif new_status == "COMPLETED":
+                    preserved_date = today_date  # newly completed → auto-stamp today
+
+                # --- stage_started_at logic ---
+                # 1. If existing start date exists → always preserve it
+                # 2. If new status is non-null and no existing start → auto-stamp today
+                preserved_start = None
+                if existing and existing.stage_started_at:
+                    preserved_start = existing.stage_started_at  # always preserve
+                elif new_status and new_status not in ("NOT_APPLICABLE", None):
+                    preserved_start = today_date  # first time this stage has a status
+
                 approval = NdcApproval(
                     ndc_record_id=record.id,
                     stage_name=stage_key,
                     approver_name=_str_or_none(approver),
-                    status=normalize_status(raw_status) if raw_status else None,
+                    status=new_status,
                     sequence_order=order,
+                    stage_completed_at=preserved_date,
+                    stage_started_at=preserved_start,
                 )
                 db.add(approval)
+                
+                # Also save the date explicitly on the NdcRecord for the database
+                # Map stage_key to the explicit column name on NdcRecord
+                col_name_map = {
+                    "RM": "rm_approval_date",
+                    "IT": "it_approval_date",
+                    "Abex": "abex_approval_date",
+                    "Telecom": "telecom_approval_date",
+                    "Store": "store_approval_date",
+                    "Safety": "safety_approval_date",
+                    "Administration": "administration_approval_date",
+                    "Security": "security_approval_date",
+                    "HR": "hr_approval_date",
+                    "GCC HR": "gcc_hr_approval_date",
+                    "Final Abex": "final_abex_approval_date",
+                    "Business Specific": "business_specific_approval_date",
+                    "Legatrix": "legatrix_approval_date"
+                }
+                col_name = col_name_map.get(stage_key)
+                if col_name:
+                    setattr(record, col_name, preserved_date)
 
             records_processed += 1
 
