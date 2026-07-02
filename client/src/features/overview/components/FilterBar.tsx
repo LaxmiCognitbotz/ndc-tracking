@@ -11,7 +11,9 @@ const APPROVAL_DEPARTMENTS = [
   "Security",
   "HR",
   "GCC HR",
-  "Final Abex"
+  "Business Specific",
+  "Final Abex",
+  "Legatrix"
 ];
 
 const APPROVAL_STATUSES = ["Pending", "Completed", "In Progress"];

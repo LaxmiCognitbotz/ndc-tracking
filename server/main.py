@@ -44,9 +44,11 @@ app.include_router(ndc.router)
 app.include_router(analytics.router)
 app.include_router(export.router)
 
-from app.routers import common_api, email_api
+from app.routers import common_api, email_api, ff, rm_email_configuration_api
 app.include_router(common_api.router)
 app.include_router(email_api.router)
+app.include_router(ff.router)
+app.include_router(rm_email_configuration_api.router)
 
 
 

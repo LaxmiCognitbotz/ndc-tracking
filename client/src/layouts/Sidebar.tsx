@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router";
-import { LayoutDashboard, BarChart3, ChevronLeft, ChevronRight, FileText, Mail } from "lucide-react";
+import { LayoutDashboard, BarChart3, ChevronLeft, ChevronRight, FileText, Mail, Settings } from "lucide-react";
 import imgLogo from "../assets/images/image.png";
 import faviconLogo from "../assets/adani-favicon.png";
 import { useSidebar } from "../context/SidebarContext";
@@ -28,8 +28,13 @@ export function Sidebar() {
     },
     {
       path: "/ndc-reporting/email-config",
-      label: "Email Configuration",
+      label: "Email Recipients",
       icon: Mail,
+    },
+    {
+      path: "/ndc-reporting/rm-email-configuration",
+      label: "RM Email Master",
+      icon: Settings,
     },
   ];
 
@@ -68,7 +73,7 @@ export function Sidebar() {
               title={isCollapsed ? item.label : ""}
             >
               <Icon className="w-5 h-5 flex-shrink-0" />
-              {!isCollapsed && <span className="font-medium">{item.label}</span>}
+              {!isCollapsed && <span className="font-medium whitespace-nowrap">{item.label}</span>}
             </Link>
           );
         })}

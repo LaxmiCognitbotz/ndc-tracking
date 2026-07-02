@@ -9,6 +9,11 @@ const api = axios.create({
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+    // Skip global toast if request configured skipGlobalToast
+    if ((error.config as any)?.skipGlobalToast) {
+      return Promise.reject(error);
+    }
+
     // Determine the error message
     const message =
       error.response?.data?.message ||

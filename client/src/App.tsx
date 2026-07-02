@@ -3,6 +3,7 @@ import { Overview } from "./features/overview/Overview";
 import { Analytics } from "./features/analytics/Analytics";
 import { FNFManagement } from "./features/fnf/FNFManagement";
 import { EmailConfig } from "./features/email-config/EmailConfig";
+import { RMEmailConfigurationPage } from "./features/rm-email-configuration/RMEmailConfigurationPage";
 import { Sidebar } from "./layouts/Sidebar";
 import { SidebarProvider, useSidebar } from "./context/SidebarContext";
 import { Toaster } from "sonner";
@@ -38,6 +39,7 @@ const router = createBrowserRouter(
         { path: "ndc-reporting/analytics", element: <Analytics /> },
         { path: "ndc-reporting/fnf", element: <FNFManagement /> },
         { path: "ndc-reporting/email-config", element: <EmailConfig /> },
+        { path: "ndc-reporting/rm-email-configuration", element: <RMEmailConfigurationPage /> },
       ],
     },
   ],

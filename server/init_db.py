@@ -8,6 +8,7 @@ from app.models import Base
 from app.models.ndc_record import NdcRecord
 from app.models.ndc_approval import NdcApproval
 from app.models.upload_batch import UploadBatch
+from app.models.rm_email_configuration import RmEmailConfiguration
 
 
 async def init_database():

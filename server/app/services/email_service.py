@@ -154,7 +154,7 @@ async def send_delayed_reminder(records: list[dict]) -> dict:
     msg.attach(MIMEText(html_body, "html"))
 
     try:
-        with smtplib.SMTP(smtp_host, smtp_port, timeout=15) as server:
+        with smtplib.SMTP(smtp_host, smtp_port, timeout=60) as server:
             server.ehlo()
             server.starttls()
             server.login(smtp_user, smtp_password)
@@ -326,20 +326,90 @@ async def send_fnf_details_email(email_to: str, record: dict) -> dict:
     body_part = MIMEText(html_body, "html")
     msg.attach(body_part)
 
-    # Attach F&F document if available
-    fnf_doc_name = record.get("fnf_document")
-    if fnf_doc_name:
-        from database import BASE_DIR
-        file_path = BASE_DIR / "uploads" / fnf_doc_name
-        if file_path.exists():
-            with open(file_path, "rb") as f:
-                attachment = MIMEApplication(f.read())
-            attachment.add_header('Content-Disposition', 'attachment', filename=fnf_doc_name)
-            msg.attach(attachment)
-            logger.info("Attached F&F document to email: %s", fnf_doc_name)
+    # Attach F&F document(s) from SharePoint or local folder as fallback
+    attached_from_sharepoint = False
+    person_number = record.get("person_number")
+    
+    if person_number:
+        from app.services.sharepoint_service import SharePointService
+        import httpx
+        
+        logger.info("Attempting to attach F&F document(s) from SharePoint for person: %s", person_number)
+        sharepoint_service = SharePointService()
+        async with httpx.AsyncClient() as client:
+            try:
+                # 1. Resolve site ID
+                site_id = await sharepoint_service.get_site_id(client)
+                
+                # 2. Resolve drive ID and folder path
+                drive_id, folder_path = await sharepoint_service.get_drive_details(client, site_id)
+                
+                # 3. Locate folder and list files
+                files, resolved_folder = await sharepoint_service.get_person_folder_files(
+                    client, site_id, drive_id, folder_path, person_number
+                )
+                
+                if files:
+                    if len(files) == 1:
+                        # Single file attachment
+                        file_item = files[0]
+                        name = file_item.get("name", "document.pdf")
+                        download_url = file_item.get("@microsoft.graph.downloadUrl")
+                        if download_url:
+                            logger.info("Downloading file '%s' from SharePoint for email attachment.", name)
+                            res = await client.get(download_url)
+                            if res.status_code == 200:
+                                attachment = MIMEApplication(res.content)
+                                attachment.add_header('Content-Disposition', 'attachment', filename=name)
+                                msg.attach(attachment)
+                                logger.info("Successfully attached SharePoint file '%s' to email.", name)
+                                attached_from_sharepoint = True
+                    else:
+                        # Multiple files: ZIP them in-memory and attach
+                        logger.info("Multiple files (%d) found in SharePoint. Zipping for email attachment...", len(files))
+                        import io
+                        import zipfile
+                        
+                        zip_buffer = io.BytesIO()
+                        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+                            for file_item in files:
+                                name = file_item.get("name", "document.pdf")
+                                download_url = file_item.get("@microsoft.graph.downloadUrl")
+                                if download_url:
+                                    logger.info("Downloading '%s' from SharePoint for email ZIP attachment...", name)
+                                    res = await client.get(download_url)
+                                    if res.status_code == 200:
+                                        zip_file.writestr(name, res.content)
+                                        
+                        zip_buffer.seek(0)
+                        zip_data = zip_buffer.read()
+                        if zip_data:
+                            zip_filename = f"{person_number}_documents.zip"
+                            attachment = MIMEApplication(zip_data)
+                            attachment.add_header('Content-Disposition', 'attachment', filename=zip_filename)
+                            msg.attach(attachment)
+                            logger.info("Successfully attached SharePoint ZIP archive '%s' to email.", zip_filename)
+                            attached_from_sharepoint = True
+                else:
+                    logger.info("No SharePoint documents found for person: %s", person_number)
+            except Exception as e:
+                logger.error("Failed to retrieve SharePoint attachments for email: %s", str(e))
+
+    # Fallback to local uploads folder if nothing was attached from SharePoint
+    if not attached_from_sharepoint:
+        fnf_doc_name = record.get("fnf_document")
+        if fnf_doc_name:
+            from database import BASE_DIR
+            file_path = BASE_DIR / "uploads" / fnf_doc_name
+            if file_path.exists():
+                with open(file_path, "rb") as f:
+                    attachment = MIMEApplication(f.read())
+                attachment.add_header('Content-Disposition', 'attachment', filename=fnf_doc_name)
+                msg.attach(attachment)
+                logger.info("Attached F&F document from local server fallback: %s", fnf_doc_name)
 
     try:
-        with smtplib.SMTP(smtp_host, smtp_port, timeout=15) as server:
+        with smtplib.SMTP(smtp_host, smtp_port, timeout=60) as server:
             server.ehlo()
             server.starttls()
             server.login(smtp_user, smtp_password)

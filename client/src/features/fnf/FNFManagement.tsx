@@ -58,7 +58,9 @@ export function FNFManagement() {
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter(
-        (r) => r.employeeName.toLowerCase().includes(query) || r.personNumber.toLowerCase().includes(query)
+        (r) =>
+          String(r.employeeName || "").toLowerCase().includes(query) ||
+          String(r.personNumber || "").toLowerCase().includes(query)
       );
     }
     return filtered;
@@ -122,11 +124,54 @@ export function FNFManagement() {
     setSelectedRecord(null);
   };
 
-  const handleDocumentView = (record: NDCRecord) => {
-    if (record.fnfDocument) {
-      window.open(`/api/v1/download-document/${record.fnfDocument}`, "_blank");
-    } else {
-      toast.error("No document available for this employee");
+  const handleDocumentView = async (record: NDCRecord) => {
+    const toastId = toast.loading(`Downloading document for ${record.employeeName}...`);
+    try {
+      const response = await axios.get(`/api/ff/download/${record.personNumber}`, {
+        responseType: "blob",
+        skipGlobalToast: true,
+      } as any);
+      
+      // Get filename from Content-Disposition header or fallback
+      const disposition = response.headers["content-disposition"] ? String(response.headers["content-disposition"]) : undefined;
+      let filename = `${record.personNumber}_document.pdf`;
+      if (disposition && disposition.indexOf("attachment") !== -1) {
+        const filenameRegex = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/;
+        const matches = filenameRegex.exec(disposition);
+        if (matches != null && matches[1]) {
+          filename = matches[1].replace(/['"]/g, "");
+        }
+      }
+      
+      const contentType = response.headers["content-type"] ? String(response.headers["content-type"]) : undefined;
+      const blob = new Blob([response.data], { type: contentType });
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = downloadUrl;
+      link.setAttribute("download", filename);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(downloadUrl);
+      
+      toast.dismiss(toastId);
+      toast.success("Document downloaded successfully");
+    } catch (error: any) {
+      toast.dismiss(toastId);
+      console.error("Download error:", error);
+      
+      let errorMessage = "Document not found.";
+      if (error.response?.data instanceof Blob) {
+        try {
+          const text = await error.response.data.text();
+          const parsed = JSON.parse(text);
+          errorMessage = parsed.message || errorMessage;
+        } catch (_) {}
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      }
+      
+      toast.error(errorMessage);
     }
   };
 

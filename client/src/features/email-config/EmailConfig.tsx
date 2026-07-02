@@ -25,14 +25,17 @@ interface EmailRecipient {
 const DEPARTMENTS = [
   "RM",
   "IT",
-  "HR",
-  "Finance",
+  "Abex",
   "Telecom",
-  "Security",
-  "Administration",
+  "Store",
   "Safety",
-  "Operations & Maintenance",
+  "Administration",
+  "Security",
+  "HR",
   "GCC HR",
+  "Business Specific",
+  "Final Abex",
+  "Legatrix",
 ];
 
 const EMPTY_FORM = { name: "", email: "", department: "", role: "" };
