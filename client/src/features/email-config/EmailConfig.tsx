@@ -232,7 +232,7 @@ export function EmailConfig() {
             <div className="flex gap-2">
               <button
                 onClick={handleAddRecipient}
-                className="px-4 py-2 bg-green-600 text-white rounded-[4px] hover:bg-green-700 transition-colors text-sm"
+                className="px-4 py-2 bg-primary text-primary-foreground rounded-[4px] hover:bg-primary/90 transition-colors text-sm"
               >
                 Add Recipient
               </button>
@@ -328,7 +328,7 @@ export function EmailConfig() {
                           <button
                             onClick={saveEdit}
                             disabled={isSaving}
-                            className="flex items-center gap-1 px-3 py-1.5 rounded-[4px] bg-green-600 text-white hover:bg-green-700 transition-colors text-xs font-medium disabled:opacity-50"
+                            className="flex items-center gap-1 px-3 py-1.5 rounded-[4px] bg-primary text-primary-foreground hover:bg-primary/90 transition-colors text-xs font-medium disabled:opacity-50"
                             title="Save changes"
                           >
                             <Check className="w-3.5 h-3.5" />
