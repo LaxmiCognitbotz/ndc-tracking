@@ -4,12 +4,47 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from fastapi.responses import StreamingResponse, JSONResponse
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
+from pydantic import BaseModel
 import pandas as pd
 
 from database import get_db
 from app.models.rm_email_configuration import RmEmailConfiguration
 
 router = APIRouter(prefix="/api/v1", tags=["rm-email-configuration"])
+
+class RmEmailCreate(BaseModel):
+    rm_name: str
+    email: str
+
+@router.post("/rm-email-configuration")
+async def create_rm_email_configuration(
+    config: RmEmailCreate,
+    db: AsyncSession = Depends(get_db)
+):
+    email_str = config.email.strip().lower()
+    
+    email_regex = r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
+    if not re.match(email_regex, email_str):
+        raise HTTPException(status_code=400, detail="Invalid email format")
+    
+    # Duplicate check
+    res = await db.execute(select(RmEmailConfiguration).where(RmEmailConfiguration.email == email_str))
+    existing = res.scalar_one_or_none()
+    
+    if existing:
+        raise HTTPException(status_code=400, detail="RM with this email already exists")
+        
+    new_config = RmEmailConfiguration(
+        rm_name=config.rm_name.strip(),
+        email=email_str
+    )
+    db.add(new_config)
+    await db.commit()
+    
+    return JSONResponse(content={
+        "success": True,
+        "message": "RM added successfully"
+    })
 
 @router.get("/rm-email-configuration")
 async def get_rm_email_configurations(

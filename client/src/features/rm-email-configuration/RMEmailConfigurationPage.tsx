@@ -11,7 +11,8 @@ import {
   ChevronRight,
   Info,
   X,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Plus
 } from "lucide-react";
 
 import {
@@ -72,6 +73,12 @@ export function RMEmailConfigurationPage() {
   // Modals states
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [configToDelete, setConfigToDelete] = useState<number | null>(null);
+  const [isAddOpen, setIsAddOpen] = useState(false);
+
+  // Add RM states
+  const [addForm, setAddForm] = useState({ rm_name: "", email: "" });
+  const [addErrors, setAddErrors] = useState({ rm_name: "", email: "" });
+  const [isAdding, setIsAdding] = useState(false);
 
   // Import file states
   const [fileToUpload, setFileToUpload] = useState<File | null>(null);
@@ -181,6 +188,51 @@ export function RMEmailConfigurationPage() {
     });
   };
 
+  // Add RM
+  const handleAddSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    // Validation
+    let hasError = false;
+    const errors = { rm_name: "", email: "" };
+    
+    if (!addForm.rm_name.trim()) {
+      errors.rm_name = "RM Name is required";
+      hasError = true;
+    }
+    
+    if (!addForm.email.trim()) {
+      errors.email = "Email is required";
+      hasError = true;
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(addForm.email)) {
+      errors.email = "Invalid email format";
+      hasError = true;
+    }
+    
+    setAddErrors(errors);
+    
+    if (hasError) return;
+    
+    setIsAdding(true);
+    axios.post("/api/v1/rm-email-configuration", addForm, {
+      // @ts-ignore - custom config property
+      skipGlobalToast: true
+    })
+      .then((res) => {
+        toast.success(res.data.message || "RM added successfully");
+        setIsAddOpen(false);
+        setAddForm({ rm_name: "", email: "" });
+        fetchData();
+      })
+      .catch((err) => {
+        const errMsg = err.response?.data?.message || err.response?.data?.detail || err.message || "Failed to add RM";
+        toast.error(errMsg);
+      })
+      .finally(() => {
+        setIsAdding(false);
+      });
+  };
+
   // Delete RM
   const confirmDelete = () => {
     if (configToDelete === null) return;
@@ -247,6 +299,18 @@ export function RMEmailConfigurationPage() {
               </button>
             )}
           </div>
+          
+          <button
+            onClick={() => {
+              setIsAddOpen(true);
+              setAddForm({ rm_name: "", email: "" });
+              setAddErrors({ rm_name: "", email: "" });
+            }}
+            className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground text-sm font-medium rounded-[4px] transition-colors shadow-sm shrink-0"
+          >
+            <Plus className="w-4 h-4" />
+            Add RM
+          </button>
         </div>
 
         {/* Data Table */}
@@ -428,6 +492,67 @@ export function RMEmailConfigurationPage() {
               </button>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add RM Modal */}
+      <Dialog open={isAddOpen} onOpenChange={(open) => !isAdding && setIsAddOpen(open)}>
+        <DialogContent className="max-w-md p-6">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold text-foreground">Add RM Email</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleAddSubmit} className="space-y-4 pt-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">RM Name <span className="text-red-500">*</span></label>
+              <input
+                type="text"
+                value={addForm.rm_name}
+                onChange={(e) => {
+                  setAddForm({ ...addForm, rm_name: e.target.value });
+                  if (addErrors.rm_name) setAddErrors({ ...addErrors, rm_name: "" });
+                }}
+                className={`w-full px-3 py-2 border rounded-[4px] text-sm bg-input-background focus:outline-none focus:ring-1 ${addErrors.rm_name ? 'border-red-500 focus:ring-red-500' : 'border-border focus:ring-primary'}`}
+                placeholder="Enter RM Name"
+                disabled={isAdding}
+              />
+              {addErrors.rm_name && <p className="text-xs text-red-500">{addErrors.rm_name}</p>}
+            </div>
+            
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">Email <span className="text-red-500">*</span></label>
+              <input
+                type="email"
+                value={addForm.email}
+                onChange={(e) => {
+                  setAddForm({ ...addForm, email: e.target.value });
+                  if (addErrors.email) setAddErrors({ ...addErrors, email: "" });
+                }}
+                className={`w-full px-3 py-2 border rounded-[4px] text-sm bg-input-background focus:outline-none focus:ring-1 ${addErrors.email ? 'border-red-500 focus:ring-red-500' : 'border-border focus:ring-primary'}`}
+                placeholder="Enter Email Address"
+                disabled={isAdding}
+              />
+              {addErrors.email && <p className="text-xs text-red-500">{addErrors.email}</p>}
+            </div>
+            
+            <div className="flex gap-3 justify-end pt-4 border-t border-border mt-6">
+              <button
+                type="button"
+                onClick={() => setIsAddOpen(false)}
+                className="px-4 py-2 border border-border text-foreground hover:bg-muted text-sm font-medium rounded-[4px] transition-colors"
+                disabled={isAdding}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isAdding}
+                className="px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 text-sm font-medium rounded-[4px] transition-colors flex items-center gap-2"
+              >
+                {isAdding && <Loader2 className="w-4 h-4 animate-spin" />}
+                Add RM
+              </button>
+            </div>
+          </form>
         </DialogContent>
       </Dialog>
 
