@@ -23,9 +23,10 @@ async def migrate():
             "ALTER TABLE ndc_records ADD COLUMN IF NOT EXISTS final_abex_approval_date DATE",
             "ALTER TABLE ndc_records ADD COLUMN IF NOT EXISTS business_specific_approval_date DATE",
             "ALTER TABLE ndc_records ADD COLUMN IF NOT EXISTS legatrix_approval_date DATE",
+            "ALTER TABLE ndc_records ADD COLUMN IF NOT EXISTS is_fnf_closed BOOLEAN NOT NULL DEFAULT FALSE",
         ]
         for sql in migrations:
-            print(f"Running: {sql[:60]}...")
+            print(f"Running: {sql[:80]}...")
             await conn.execute(text(sql))
         print("Migration completed successfully!")
 
