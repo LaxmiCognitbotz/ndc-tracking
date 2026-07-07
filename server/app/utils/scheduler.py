@@ -39,7 +39,6 @@ async def sharepoint_sync_loop():
                 
                 async with async_session() as db:
                     result = await sync_service.check_and_ingest_new_files(db)
-                    fnf_result = await sync_service.sync_fnf_completed_records(db)
                     
                 if result["files_ingested"] > 0:
                     logger.info(f"Background Scheduler: Successfully ingested {result['files_ingested']} new file(s).")
@@ -47,13 +46,6 @@ async def sharepoint_sync_loop():
                     logger.error(f"Background Scheduler: SharePoint sync failed. Errors: {result['errors']}")
                 else:
                     logger.info("Background Scheduler: No new files found on SharePoint.")
-
-                if fnf_result["records_updated"] > 0:
-                    logger.info(f"Background Scheduler: Successfully updated F&F completed status for {fnf_result['records_updated']} records.")
-                elif fnf_result["status"] == "failed":
-                    logger.error(f"Background Scheduler: SharePoint F&F sync failed. Errors: {fnf_result['errors']}")
-                else:
-                    logger.info("Background Scheduler: No new F&F folders found on SharePoint to update.")
                 
         except asyncio.CancelledError:
             logger.info("Background Scheduler task cancelled.")
@@ -66,4 +58,42 @@ async def sharepoint_sync_loop():
             await asyncio.sleep(30)
         except asyncio.CancelledError:
             logger.info("Background Scheduler sleep cancelled.")
+            break
+
+async def fnf_completed_sync_loop():
+    """
+    Background polling loop to sync F&F completed status from SharePoint every 30 minutes.
+    """
+    enabled = os.getenv("SHAREPOINT_SYNC_BACKGROUND_POLL", "true").lower() == "true"
+    if not enabled:
+        logger.info("F&F SharePoint background sync is disabled (SHAREPOINT_SYNC_BACKGROUND_POLL=false).")
+        return
+
+    logger.info("Starting F&F SharePoint completed sync scheduler. Triggers every 30 minutes.")
+    sync_service = SharePointSyncService()
+    
+    while True:
+        try:
+            logger.info("Background F&F Scheduler: Initiating sync...")
+            async with async_session() as db:
+                fnf_result = await sync_service.sync_fnf_completed_records(db)
+                
+            if fnf_result["records_updated"] > 0 or fnf_result.get("records_reverted", 0) > 0:
+                logger.info(f"Background F&F Scheduler: Successfully synced F&F status - Completed: {fnf_result['records_updated']}, Reverted: {fnf_result.get('records_reverted', 0)}.")
+            elif fnf_result["status"] == "failed":
+                logger.error(f"Background F&F Scheduler: Sync failed. Errors: {fnf_result['errors']}")
+            else:
+                logger.info("Background F&F Scheduler: No F&F status changes detected.")
+                
+        except asyncio.CancelledError:
+            logger.info("Background F&F Scheduler task cancelled.")
+            break
+        except Exception as e:
+            logger.exception(f"Background F&F Scheduler: Error during sync: {e}")
+            
+        # Sleep for 30 minutes (30 * 60 = 1800 seconds)
+        try:
+            await asyncio.sleep(1800)
+        except asyncio.CancelledError:
+            logger.info("Background F&F Scheduler sleep cancelled.")
             break

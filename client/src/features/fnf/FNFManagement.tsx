@@ -6,13 +6,12 @@ import { PPTDownloadButton } from "../../components/common/PPTDownloadButton";
 import { FullScreenModal } from "../../components/common/FullScreenModal";
 import { LoadingScreen } from "../../components/common/LoadingScreen";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../../components/ui/dialog";
-import { FileText, Download, Filter, CheckCircle, XCircle, Clock, Send, CheckSquare, Mail, TrendingUp, ChevronLeft, ChevronRight, RefreshCw } from "lucide-react";
+import { FileText, Download, Filter, CheckCircle, XCircle, Clock, Send, CheckSquare, Mail, TrendingUp, ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 
 export function FNFManagement() {
   const [mockNDCData, setMockNDCData] = useState<NDCRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isSyncing, setIsSyncing] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -89,12 +88,12 @@ export function FNFManagement() {
     const tatRecords = eligibleRecords.filter((r) => r.isFnfCompleted && r.fnfCompletedDate && r.gccInitiateDate);
     const avgTAT = tatRecords.length > 0
       ? Math.round(
-          tatRecords.reduce((sum, r) => {
-            const end = new Date(r.fnfCompletedDate);
-            const start = new Date(r.gccInitiateDate);
-            return sum + Math.abs((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
-          }, 0) / tatRecords.length
-        )
+        tatRecords.reduce((sum, r) => {
+          const end = new Date(r.fnfCompletedDate);
+          const start = new Date(r.gccInitiateDate);
+          return sum + Math.abs((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+        }, 0) / tatRecords.length
+      )
       : 0;
 
     return { total, done, open, revision, closed, avgTAT };
@@ -134,7 +133,7 @@ export function FNFManagement() {
         responseType: "blob",
         skipGlobalToast: true,
       } as any);
-      
+
       // Get filename from Content-Disposition header or fallback
       const disposition = response.headers["content-disposition"] ? String(response.headers["content-disposition"]) : undefined;
       let filename = `${record.personNumber}_document.pdf`;
@@ -145,7 +144,7 @@ export function FNFManagement() {
           filename = matches[1].replace(/['"]/g, "");
         }
       }
-      
+
       const contentType = response.headers["content-type"] ? String(response.headers["content-type"]) : undefined;
       const blob = new Blob([response.data], { type: contentType });
       const downloadUrl = window.URL.createObjectURL(blob);
@@ -156,24 +155,24 @@ export function FNFManagement() {
       link.click();
       link.remove();
       window.URL.revokeObjectURL(downloadUrl);
-      
+
       toast.dismiss(toastId);
       toast.success("Document downloaded successfully");
     } catch (error: any) {
       toast.dismiss(toastId);
       console.error("Download error:", error);
-      
+
       let errorMessage = "Document not found.";
       if (error.response?.data instanceof Blob) {
         try {
           const text = await error.response.data.text();
           const parsed = JSON.parse(text);
           errorMessage = parsed.message || errorMessage;
-        } catch (_) {}
+        } catch (_) { }
       } else if (error.response?.data?.message) {
         errorMessage = error.response.data.message;
       }
-      
+
       toast.error(errorMessage);
     }
   };
@@ -228,32 +227,13 @@ export function FNFManagement() {
   const handleDownloadPPT = async () => {
     const { createPPT, addImageSlide } = await import("../../utils/pptExport");
     const pptx = createPPT("FnF Management Dashboard");
-    
+
     await addImageSlide(pptx, "F&F KPI Summary", "section-fnf-kpis");
-    
+
     await pptx.writeFile({ fileName: "FnF_Management_Dashboard.pptx" });
   };
 
-  const handleSyncSharePoint = async () => {
-    setIsSyncing(true);
-    const toastId = toast.loading("Syncing completed F&F folders from SharePoint...");
-    try {
-      const response = await axios.post("/api/ff/sync");
-      const result = response.data?.data || response.data;
-      if (result.status === "success") {
-        toast.success(`SharePoint sync completed! Checked ${result.folders_found} folders. Marked ${result.records_updated} records completed and reverted ${result.records_reverted || 0} records.`);
-        fetchData();
-      } else {
-        toast.error(`Sync finished with errors: ${result.errors?.join(", ") || "Unknown error"}`);
-      }
-    } catch (error: any) {
-      console.error("Sync error:", error);
-      toast.error(error.response?.data?.message || "Failed to trigger SharePoint F&F sync.");
-    } finally {
-      setIsSyncing(false);
-      toast.dismiss(toastId);
-    }
-  };
+
 
   return (
     <div className="p-8 space-y-6 bg-background min-h-full">
@@ -262,17 +242,7 @@ export function FNFManagement() {
           <h1 className="text-3xl font-bold text-foreground">F&amp;F Document Management</h1>
           <p className="text-muted-foreground mt-2">Full &amp; Final Settlement Processing</p>
         </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={handleSyncSharePoint}
-            disabled={isSyncing}
-            className="flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground rounded-[4px] border border-border hover:bg-secondary/90 transition-colors disabled:opacity-50"
-          >
-            <RefreshCw className={`w-4 h-4 ${isSyncing ? "animate-spin" : ""}`} />
-            {isSyncing ? "Syncing..." : "Sync from SharePoint"}
-          </button>
-          <PPTDownloadButton onDownload={handleDownloadPPT} />
-        </div>
+        <PPTDownloadButton onDownload={handleDownloadPPT} />
       </div>
 
       {/* KPI Cards */}
@@ -405,7 +375,7 @@ export function FNFManagement() {
             </tbody>
           </table>
         </div>
-        
+
         {filteredData.length > 0 && (
           <div className="px-6 py-4 border-t border-border flex items-center justify-between">
             <div className="text-sm text-muted-foreground">
@@ -498,7 +468,7 @@ export function FNFManagement() {
                 </tbody>
               </table>
             </div>
-            
+
             {kpiModalData.data.length > 0 && (
               <div className="px-6 py-4 border-t border-border flex items-center justify-between bg-card">
                 <div className="text-sm text-muted-foreground">
@@ -549,11 +519,11 @@ export function FNFManagement() {
                   Department: <span className="text-slate-700">{selectedRecord.department}</span>
                 </p>
               </div>
-              
+
               <p className="text-base text-slate-900">
                 Is the F&amp;F document ready to be processed?
               </p>
-              
+
               <div className="flex gap-4">
                 <button
                   onClick={() => handleAction(selectedRecord, "closed")}
@@ -612,18 +582,18 @@ export function FNFManagement() {
                     email: mailEmailTo,
                     record_id: parseInt(mailRecord.id)
                   })
-                  .then(() => {
-                    toast.dismiss(toastId);
-                    toast.success(`Email sent successfully to ${mailEmailTo}`);
-                    setMailDialogOpen(false);
-                    setMailRecord(null);
-                    setMailEmailTo("");
-                  })
-                  .catch((err) => {
-                    toast.dismiss(toastId);
-                    const errMsg = err.response?.data?.detail || err.message || "Failed to send email";
-                    toast.error(errMsg);
-                  });
+                    .then(() => {
+                      toast.dismiss(toastId);
+                      toast.success(`Email sent successfully to ${mailEmailTo}`);
+                      setMailDialogOpen(false);
+                      setMailRecord(null);
+                      setMailEmailTo("");
+                    })
+                    .catch((err) => {
+                      toast.dismiss(toastId);
+                      const errMsg = err.response?.data?.detail || err.message || "Failed to send email";
+                      toast.error(errMsg);
+                    });
                 }}
                 className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-[4px] hover:bg-primary/90 transition-colors flex items-center justify-center gap-2"
               >
