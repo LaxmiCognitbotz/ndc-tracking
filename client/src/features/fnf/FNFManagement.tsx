@@ -38,6 +38,11 @@ export function FNFManagement() {
   const [currentPage, setCurrentPage] = useState(1);
   const [kpiCurrentPage, setKpiCurrentPage] = useState(1);
 
+  // Reset to first page on filter change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [statusFilter, searchQuery]);
+
   // F&F eligible = NDC Completed AND GCC HR Completed
   const isEligible = (r: NDCRecord) =>
     r.ndcStage === "NDC Completed" && r.gccHrApprovalStatus === "Completed";
@@ -51,9 +56,6 @@ export function FNFManagement() {
       else if (statusFilter === "Closed") filtered = filtered.filter((r) => r.isFnfClosed);
       else if (statusFilter === "Open") filtered = filtered.filter((r) => !r.isFnfCompleted && !r.isFnfRevision);
       else if (statusFilter === "Revision Required") filtered = filtered.filter((r) => r.isFnfRevision);
-    } else {
-      // By default (All statuses), exclude closed records from the list
-      filtered = filtered.filter((r) => !r.isFnfClosed);
     }
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
@@ -76,7 +78,7 @@ export function FNFManagement() {
   const kpiPaginatedData = kpiModalData.data.slice(kpiStartIndex, kpiStartIndex + itemsPerPage);
 
   const fnfStats = useMemo(() => {
-    const total = eligibleRecords.filter((r) => !r.isFnfClosed).length;
+    const total = eligibleRecords.length;
     const done = eligibleRecords.filter((r) => r.isFnfCompleted).length;
     const open = eligibleRecords.filter((r) => !r.isFnfCompleted && !r.isFnfRevision).length;
     const revision = eligibleRecords.filter((r) => r.isFnfRevision).length;
@@ -177,7 +179,7 @@ export function FNFManagement() {
 
   const handleKPIClick = (type: "total" | "done" | "open" | "revision" | "closed" | "avgTAT") => {
     const map = {
-      total: { title: "Total F&F In Process", data: eligibleRecords.filter((r) => !r.isFnfClosed) },
+      total: { title: "Total F&F In Process", data: eligibleRecords },
       done: { title: "F&F Completed", data: eligibleRecords.filter((r) => r.isFnfCompleted) },
       open: { title: "F&F Open", data: eligibleRecords.filter((r) => !r.isFnfCompleted && !r.isFnfRevision) },
       revision: { title: "Revision Required", data: eligibleRecords.filter((r) => r.isFnfRevision) },
@@ -190,6 +192,7 @@ export function FNFManagement() {
   };
 
   const getFNFStatusLabel = (record: NDCRecord) => {
+    if (record.isFnfClosed) return "Closed";
     if (record.isFnfCompleted) return "Completed";
     if (record.isFnfRevision) return "Revision Required";
     return "Open";
