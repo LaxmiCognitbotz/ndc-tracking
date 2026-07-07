@@ -5,7 +5,7 @@ import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.sharepoint_service import SharePointService
+from app.services.sharepoint_service import SharePointService, get_httpx_client
 from app.services.ingest_service import ingest_excel_file
 from app.models.upload_batch import UploadBatch
 
@@ -32,7 +32,7 @@ class SharePointSyncService:
             "errors": []
         }
 
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        async with get_httpx_client(timeout=60.0) as client:
             try:
                 # 1. Resolve site ID
                 site_id = await self.sharepoint.get_site_id(client)
@@ -179,7 +179,7 @@ class SharePointSyncService:
             "errors": []
         }
         
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        async with get_httpx_client(timeout=60.0) as client:
             try:
                 # 1. Resolve site ID
                 site_id = await self.sharepoint.get_site_id(client)

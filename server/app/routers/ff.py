@@ -2,7 +2,7 @@ import logging
 from fastapi import APIRouter, Depends, status
 from fastapi.responses import StreamingResponse, JSONResponse
 import httpx
-from app.services.sharepoint_service import SharePointService
+from app.services.sharepoint_service import SharePointService, get_httpx_client
 from database import get_db
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,7 +22,7 @@ async def download_ff_document(person_number: str):
     """
     logger.info(f"Received SharePoint document download request for person: {person_number}")
     
-    async with httpx.AsyncClient() as client:
+    async with get_httpx_client() as client:
         try:
             # 1. Resolve site ID
             site_id = await sharepoint_service.get_site_id(client)

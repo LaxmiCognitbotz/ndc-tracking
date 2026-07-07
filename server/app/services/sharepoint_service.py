@@ -8,6 +8,31 @@ from typing import AsyncGenerator, Dict, Any, List, Tuple, Optional
 
 logger = logging.getLogger(__name__)
 
+def get_httpx_client(*args, **kwargs) -> httpx.AsyncClient:
+    """
+    Creates an httpx.AsyncClient with SSL verification optionally disabled or customized
+    via environment variables (SHAREPOINT_SSL_VERIFY or SSL_VERIFY).
+    Supports boolean strings (e.g. 'false') or a path to a CA bundle file.
+    """
+    verify_val = os.getenv("SHAREPOINT_SSL_VERIFY")
+    if verify_val is None:
+        verify_val = os.getenv("SSL_VERIFY")
+        
+    if verify_val is not None:
+        val_lower = verify_val.strip().lower()
+        if val_lower in ("false", "0", "no", "off"):
+            verify = False
+        elif val_lower in ("true", "1", "yes", "on"):
+            verify = True
+        else:
+            verify = verify_val
+    else:
+        verify = True
+
+    if "verify" not in kwargs:
+        kwargs["verify"] = verify
+    return httpx.AsyncClient(*args, **kwargs)
+
 class SharePointService:
     def __init__(self):
         # Cached properties to avoid repeating site/drive lookups
@@ -252,7 +277,7 @@ class SharePointService:
         
         # Generator function that streams file chunk-by-chunk using a self-managed httpx client
         async def stream_generator():
-            async with httpx.AsyncClient() as dl_client:
+            async with get_httpx_client() as dl_client:
                 async with dl_client.stream("GET", download_url) as r:
                     r.raise_for_status()
                     async for chunk in r.aiter_bytes(chunk_size=8192):
@@ -279,7 +304,7 @@ class SharePointService:
             zip_buffer = io.BytesIO()
             # Compile the zip archive in-memory
             with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
-                async with httpx.AsyncClient() as fetch_client:
+                async with get_httpx_client() as fetch_client:
                     for file_item in files:
                         name = file_item.get("name", "document.pdf")
                         download_url = file_item.get("@microsoft.graph.downloadUrl")

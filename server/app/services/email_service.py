@@ -334,12 +334,11 @@ async def send_fnf_details_email(email_to: str, record: dict) -> dict:
     person_number = record.get("person_number")
     
     if person_number:
-        from app.services.sharepoint_service import SharePointService
-        import httpx
+        from app.services.sharepoint_service import SharePointService, get_httpx_client
         
         logger.info("Attempting to attach F&F document(s) from SharePoint for person: %s", person_number)
         sharepoint_service = SharePointService()
-        async with httpx.AsyncClient() as client:
+        async with get_httpx_client() as client:
             try:
                 # 1. Resolve site ID
                 site_id = await sharepoint_service.get_site_id(client)
