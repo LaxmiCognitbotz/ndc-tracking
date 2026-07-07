@@ -11,9 +11,18 @@ logger = logging.getLogger(__name__)
 def get_httpx_client(*args, **kwargs) -> httpx.AsyncClient:
     """
     Creates an httpx.AsyncClient with SSL verification optionally disabled or customized
-    via environment variables (SHAREPOINT_SSL_VERIFY or SSL_VERIFY).
-    Supports boolean strings (e.g. 'false') or a path to a CA bundle file.
+    via environment variables (SHAREPOINT_SSL_VERIFY, SSL_VERIFY, or PROXY_INSECURE_SSL).
+    Also supports custom proxies configured via PROXY_ENABLED and PROXY_URL.
     """
+    # 1. SSL Verification
+    verify = True
+    
+    # Check general proxy SSL setting first
+    proxy_insecure = os.getenv("PROXY_INSECURE_SSL", "false").lower() in ("true", "1", "yes", "on")
+    if proxy_insecure:
+        verify = False
+
+    # Allow more specific overrides
     verify_val = os.getenv("SHAREPOINT_SSL_VERIFY")
     if verify_val is None:
         verify_val = os.getenv("SSL_VERIFY")
@@ -26,11 +35,16 @@ def get_httpx_client(*args, **kwargs) -> httpx.AsyncClient:
             verify = True
         else:
             verify = verify_val
-    else:
-        verify = True
 
     if "verify" not in kwargs:
         kwargs["verify"] = verify
+
+    # 2. Proxy Configuration
+    proxy_enabled = os.getenv("PROXY_ENABLED", "false").lower() in ("true", "1", "yes", "on")
+    proxy_url = os.getenv("PROXY_URL")
+    if proxy_enabled and proxy_url and "proxy" not in kwargs:
+        kwargs["proxy"] = proxy_url
+
     return httpx.AsyncClient(*args, **kwargs)
 
 class SharePointService:
