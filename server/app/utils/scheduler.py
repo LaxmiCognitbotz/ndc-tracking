@@ -39,6 +39,7 @@ async def sharepoint_sync_loop():
                 
                 async with async_session() as db:
                     result = await sync_service.check_and_ingest_new_files(db)
+                    fnf_result = await sync_service.sync_fnf_completed_records(db)
                     
                 if result["files_ingested"] > 0:
                     logger.info(f"Background Scheduler: Successfully ingested {result['files_ingested']} new file(s).")
@@ -46,6 +47,13 @@ async def sharepoint_sync_loop():
                     logger.error(f"Background Scheduler: SharePoint sync failed. Errors: {result['errors']}")
                 else:
                     logger.info("Background Scheduler: No new files found on SharePoint.")
+
+                if fnf_result["records_updated"] > 0:
+                    logger.info(f"Background Scheduler: Successfully updated F&F completed status for {fnf_result['records_updated']} records.")
+                elif fnf_result["status"] == "failed":
+                    logger.error(f"Background Scheduler: SharePoint F&F sync failed. Errors: {fnf_result['errors']}")
+                else:
+                    logger.info("Background Scheduler: No new F&F folders found on SharePoint to update.")
                 
         except asyncio.CancelledError:
             logger.info("Background Scheduler task cancelled.")

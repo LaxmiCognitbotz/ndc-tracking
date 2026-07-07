@@ -208,15 +208,37 @@ async def update_fnf_status(
 
 async def _propagate_department_dates(record_id: int, fnf_completed_date: date, db: AsyncSession):
     """Auto-fill blank department stage_completed_at dates when F&F is completed."""
+    record_res = await db.execute(select(NdcRecord).where(NdcRecord.id == record_id))
+    record = record_res.scalar_one_or_none()
+
     approvals_res = await db.execute(
         select(NdcApproval).where(NdcApproval.ndc_record_id == record_id)
     )
+    col_name_map = {
+        "RM": "rm_approval_date",
+        "IT": "it_approval_date",
+        "Abex": "abex_approval_date",
+        "Telecom": "telecom_approval_date",
+        "Store": "store_approval_date",
+        "Safety": "safety_approval_date",
+        "Administration": "administration_approval_date",
+        "Security": "security_approval_date",
+        "HR": "hr_approval_date",
+        "GCC HR": "gcc_hr_approval_date",
+        "Final Abex": "final_abex_approval_date",
+        "Business Specific": "business_specific_approval_date",
+        "Legatrix": "legatrix_approval_date"
+    }
     for approval in approvals_res.scalars().all():
         # Only fill if both status and date are blank/null
         status_blank = approval.status is None or approval.status == ""
         date_blank = approval.stage_completed_at is None
         if status_blank and date_blank:
             approval.stage_completed_at = fnf_completed_date
+            if record:
+                col_name = col_name_map.get(approval.stage_name)
+                if col_name and getattr(record, col_name) is None:
+                    setattr(record, col_name, fnf_completed_date)
 
 
 from fastapi.responses import FileResponse

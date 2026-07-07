@@ -3,6 +3,8 @@ from fastapi import APIRouter, Depends, status
 from fastapi.responses import StreamingResponse, JSONResponse
 import httpx
 from app.services.sharepoint_service import SharePointService
+from database import get_db
+from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
@@ -72,3 +74,14 @@ async def download_ff_document(person_number: str):
                     "message": f"SharePoint server error: {str(e)}"
                 }
             )
+
+@router.post("/sync")
+async def sync_ff_completed_records(db: AsyncSession = Depends(get_db)):
+    """
+    Manually triggers F&F SharePoint folder sync to identify which employees
+    have folders under F&F_Documents, and marks their status in the DB as completed.
+    """
+    from app.services.sharepoint_sync_service import SharePointSyncService
+    sync_service = SharePointSyncService()
+    result = await sync_service.sync_fnf_completed_records(db)
+    return result

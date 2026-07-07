@@ -6,12 +6,13 @@ import { PPTDownloadButton } from "../../components/common/PPTDownloadButton";
 import { FullScreenModal } from "../../components/common/FullScreenModal";
 import { LoadingScreen } from "../../components/common/LoadingScreen";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../../components/ui/dialog";
-import { FileText, Download, Filter, CheckCircle, XCircle, Clock, Send, CheckSquare, Mail, TrendingUp, ChevronLeft, ChevronRight } from "lucide-react";
+import { FileText, Download, Filter, CheckCircle, XCircle, Clock, Send, CheckSquare, Mail, TrendingUp, ChevronLeft, ChevronRight, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 
 export function FNFManagement() {
   const [mockNDCData, setMockNDCData] = useState<NDCRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -233,6 +234,27 @@ export function FNFManagement() {
     await pptx.writeFile({ fileName: "FnF_Management_Dashboard.pptx" });
   };
 
+  const handleSyncSharePoint = async () => {
+    setIsSyncing(true);
+    const toastId = toast.loading("Syncing completed F&F folders from SharePoint...");
+    try {
+      const response = await axios.post("/api/ff/sync");
+      const result = response.data?.data || response.data;
+      if (result.status === "success") {
+        toast.success(`SharePoint sync completed! Checked ${result.folders_found} folders. Marked ${result.records_updated} records completed and reverted ${result.records_reverted || 0} records.`);
+        fetchData();
+      } else {
+        toast.error(`Sync finished with errors: ${result.errors?.join(", ") || "Unknown error"}`);
+      }
+    } catch (error: any) {
+      console.error("Sync error:", error);
+      toast.error(error.response?.data?.message || "Failed to trigger SharePoint F&F sync.");
+    } finally {
+      setIsSyncing(false);
+      toast.dismiss(toastId);
+    }
+  };
+
   return (
     <div className="p-8 space-y-6 bg-background min-h-full">
       <div className="mb-8 flex items-center justify-between">
@@ -240,7 +262,17 @@ export function FNFManagement() {
           <h1 className="text-3xl font-bold text-foreground">F&amp;F Document Management</h1>
           <p className="text-muted-foreground mt-2">Full &amp; Final Settlement Processing</p>
         </div>
-        <PPTDownloadButton onDownload={handleDownloadPPT} />
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleSyncSharePoint}
+            disabled={isSyncing}
+            className="flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground rounded-[4px] border border-border hover:bg-secondary/90 transition-colors disabled:opacity-50"
+          >
+            <RefreshCw className={`w-4 h-4 ${isSyncing ? "animate-spin" : ""}`} />
+            {isSyncing ? "Syncing..." : "Sync from SharePoint"}
+          </button>
+          <PPTDownloadButton onDownload={handleDownloadPPT} />
+        </div>
       </div>
 
       {/* KPI Cards */}
