@@ -128,15 +128,15 @@ async def send_delayed_reminder(records: list[dict]) -> dict:
     Returns:
         {"success": bool, "message": str}
     """
-    smtp_host = os.getenv("SMTP_HOST", "smtp.gmail.com")
+    smtp_host = os.getenv("SMTP_HOST") or os.getenv("SMTP_SERVER", "smtp.gmail.com")
     smtp_port = int(os.getenv("SMTP_PORT", "587"))
-    smtp_user = os.getenv("SMTP_USER", "")
+    smtp_user = os.getenv("SMTP_USER") or os.getenv("SMTP_USERNAME", "")
     smtp_password = os.getenv("SMTP_PASSWORD", "")
     smtp_from = os.getenv("SMTP_FROM", smtp_user)
     recipient = os.getenv("EMAIL_RECIPIENT", "")
 
-    if not smtp_user or not smtp_password:
-        msg = "SMTP credentials not configured"
+    if not smtp_user:
+        msg = "SMTP user not configured"
         logger.error(msg)
         return {"success": False, "message": msg}
 
@@ -156,8 +156,11 @@ async def send_delayed_reminder(records: list[dict]) -> dict:
     try:
         with smtplib.SMTP(smtp_host, smtp_port, timeout=60) as server:
             server.ehlo()
-            server.starttls()
-            server.login(smtp_user, smtp_password)
+            if "starttls" in server.esmtp_features:
+                server.starttls()
+                server.ehlo()
+            if smtp_password:
+                server.login(smtp_user, smtp_password)
             server.sendmail(smtp_from, [recipient], msg.as_string())
 
         logger.info("Delayed-cases reminder sent to %s (%d records)", recipient, len(records))
@@ -177,14 +180,14 @@ async def send_fnf_details_email(email_to: str, record: dict) -> dict:
     """
     from email.mime.application import MIMEApplication
 
-    smtp_host = os.getenv("SMTP_HOST", "smtp.gmail.com")
+    smtp_host = os.getenv("SMTP_HOST") or os.getenv("SMTP_SERVER", "smtp.gmail.com")
     smtp_port = int(os.getenv("SMTP_PORT", "587"))
-    smtp_user = os.getenv("SMTP_USER", "")
+    smtp_user = os.getenv("SMTP_USER") or os.getenv("SMTP_USERNAME", "")
     smtp_password = os.getenv("SMTP_PASSWORD", "")
     smtp_from = os.getenv("SMTP_FROM", smtp_user)
 
-    if not smtp_user or not smtp_password:
-        msg = "SMTP credentials not configured"
+    if not smtp_user:
+        msg = "SMTP user not configured"
         logger.error(msg)
         return {"success": False, "message": msg}
 
@@ -411,8 +414,11 @@ async def send_fnf_details_email(email_to: str, record: dict) -> dict:
     try:
         with smtplib.SMTP(smtp_host, smtp_port, timeout=60) as server:
             server.ehlo()
-            server.starttls()
-            server.login(smtp_user, smtp_password)
+            if "starttls" in server.esmtp_features:
+                server.starttls()
+                server.ehlo()
+            if smtp_password:
+                server.login(smtp_user, smtp_password)
             server.sendmail(smtp_from, [email_to], msg.as_string())
 
         logger.info("F&F details email sent to %s for %s", email_to, record.get('employee_name'))
