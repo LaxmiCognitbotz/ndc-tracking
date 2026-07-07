@@ -26,13 +26,14 @@ async def ingest_excel_file(
     file_name: str,
     uploaded_by: str,
     db: AsyncSession,
+    source_type: str = "manual",
 ) -> dict:
     """Parse Excel file, validate, and upsert into DB. Returns ingest result dict."""
 
     # Create batch record
     batch = UploadBatch(
         file_name=file_name,
-        source_type="manual",
+        source_type=source_type,
         uploaded_by=uploaded_by,
         status="processing",
     )

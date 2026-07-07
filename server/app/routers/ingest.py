@@ -46,12 +46,20 @@ async def upload_excel(
     with open(file_path, "wb") as f:
         f.write(content)
 
-    result = await ingest_excel_file(
-        file_path=str(file_path),
-        file_name=file.filename,
-        uploaded_by=user.get("sub", "unknown"),
-        db=db,
-    )
+    try:
+        result = await ingest_excel_file(
+            file_path=str(file_path),
+            file_name=file.filename,
+            uploaded_by=user.get("sub", "unknown"),
+            db=db,
+        )
+    finally:
+        if file_path.exists():
+            try:
+                os.remove(file_path)
+            except Exception as e:
+                # Fallback to ignore error if file can't be deleted immediately (e.g. permission or locking issue)
+                pass
 
     return IngestResponse(**result)
 

@@ -1,5 +1,7 @@
 import os
+import asyncio
 import uvicorn
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -19,12 +21,26 @@ from app.utils.response import (
 )
 from fastapi.exceptions import RequestValidationError
 from fastapi import HTTPException
+from app.utils.scheduler import sharepoint_sync_loop
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Start the background task
+    bg_task = asyncio.create_task(sharepoint_sync_loop())
+    yield
+    # Cancel the background task on shutdown
+    bg_task.cancel()
+    try:
+        await bg_task
+    except asyncio.CancelledError:
+        pass
 
 app = FastAPI(
     title="NDC/GCC Workflow Tracking API",
     version="1.0.0",
     description="Backend API for NDC/GCC workflow tracking and reporting",
     default_response_class=UnifiedJSONResponse,
+    lifespan=lifespan,
 )
 
 app.add_exception_handler(RequestValidationError, validation_exception_handler)

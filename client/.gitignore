@@ -26,3 +26,8 @@ dist-ssr
 # Test files
 test-ppt.js
 *.pptx
+
+# Lock files
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
