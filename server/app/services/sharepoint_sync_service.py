@@ -270,9 +270,11 @@ class SharePointSyncService:
                 
                 reverted_count = 0
                 for record in records_to_revert:
+                    # Never revert a record that has been manually closed — is_fnf_closed is permanent
+                    if record.is_fnf_closed:
+                        continue
                     record.is_fnf_completed = False
                     record.fnf_completed_date = None
-                    record.is_fnf_closed = False
                     reverted_count += 1
                     
                 if completed_count > 0 or reverted_count > 0:
@@ -292,10 +294,10 @@ class SharePointSyncService:
 
     async def generate_and_upload_fnf_closed_report(self, db: AsyncSession) -> dict:
         """
-        Queries all NdcRecords where is_fnf_closed=True, generates an Excel report,
-        and uploads it to the SharePoint folder 'fnf_closed_report' under the base
-        target folder. The file is named:
-            FNF_Closed_Report_YYYY-MM-DD_HH-MM.xlsx
+        READ-ONLY: Queries person numbers where is_fnf_closed=True,
+        generates an Excel with just those person numbers,
+        and uploads it to SharePoint folder 'fnf_closed_report'.
+        Does NOT write, update, or delete anything in the database.
         """
         results = {
             "status": "success",
@@ -305,16 +307,16 @@ class SharePointSyncService:
         }
 
         try:
-            # ── 1. Query all FNF-closed records ──────────────────────────────────
+            # ── 1. Read-only SELECT — only person numbers where is_fnf_closed=True ─
             from app.models.ndc_record import NdcRecord
 
-            stmt = select(NdcRecord).where(NdcRecord.is_fnf_completed == True).order_by(
-                NdcRecord.person_number
-            )
+            stmt = select(NdcRecord.person_number).where(
+                NdcRecord.is_fnf_closed == True
+            ).order_by(NdcRecord.person_number)
             db_result = await db.execute(stmt)
-            records = db_result.scalars().all()
-            results["records_exported"] = len(records)
-            logger.info(f"FNF Closed Report: Found {len(records)} record(s) with is_fnf_completed=True.")
+            person_numbers = [row[0] for row in db_result.fetchall()]
+            results["records_exported"] = len(person_numbers)
+            logger.info(f"FNF Closed Report: Found {len(person_numbers)} record(s) with is_fnf_closed=True.")
 
             # ── 2. Build Excel workbook (Person Number only) ─────────────────────
             HEADER_FONT = Font(bold=True, color="FFFFFF", size=11)
@@ -339,8 +341,8 @@ class SharePointSyncService:
             header_cell.alignment = HEADER_ALIGNMENT
             header_cell.border = THIN_BORDER
 
-            for r in records:
-                ws.append([r.person_number])
+            for pn in person_numbers:
+                ws.append([pn])
 
             ws.column_dimensions["A"].width = 20
 
@@ -355,7 +357,7 @@ class SharePointSyncService:
             file_name = f"FNF_Closed_Report_{now_str}.xlsx"
             results["uploaded_file_name"] = file_name
 
-            upload_subfolder = "fnf_closed_report"
+            upload_subfolder = "F&F_Closed_Report"
 
             async with get_httpx_client(timeout=120.0) as client:
                 # Resolve site & drive
