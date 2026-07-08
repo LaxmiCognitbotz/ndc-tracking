@@ -383,17 +383,33 @@ class SharePointSyncService:
                     f"https://graph.microsoft.com/v1.0/sites/{site_id}/drives/{drive_id}"
                     f"/root:/{encoded_folder}:/children"
                 )
-                list_resp = await client.get(list_url, headers={"Authorization": f"Bearer {token}"})
+                auth_header = {"Authorization": f"Bearer {token}"}
+                list_resp = await client.get(list_url, headers=auth_header)
+                logger.info(f"FNF Closed Report: List folder status={list_resp.status_code} for '{clean_folder}'")
                 if list_resp.status_code == 200:
-                    for item in list_resp.json().get("value", []):
+                    existing_items = list_resp.json().get("value", [])
+                    logger.info(f"FNF Closed Report: Found {len(existing_items)} item(s) in folder, cleaning up old .xlsx files...")
+                    for item in existing_items:
                         if "file" in item and item.get("name", "").endswith(".xlsx"):
                             item_id = item["id"]
+                            item_name = item.get("name", "")
                             del_url = (
                                 f"https://graph.microsoft.com/v1.0/sites/{site_id}/drives/{drive_id}"
                                 f"/items/{item_id}"
                             )
-                            await client.delete(del_url, headers={"Authorization": f"Bearer {token}"})
-                            logger.info(f"FNF Closed Report: Deleted old file '{item['name']}' from SharePoint.")
+                            del_resp = await client.delete(del_url, headers=auth_header)
+                            if del_resp.status_code in (200, 204):
+                                logger.info(f"FNF Closed Report: Deleted old file '{item_name}' from SharePoint.")
+                            else:
+                                logger.warning(
+                                    f"FNF Closed Report: Failed to delete '{item_name}' "
+                                    f"(status {del_resp.status_code}): {del_resp.text}"
+                                )
+                else:
+                    logger.warning(
+                        f"FNF Closed Report: Could not list folder '{clean_folder}' "
+                        f"(status {list_resp.status_code}): {list_resp.text} — skipping cleanup."
+                    )
 
                 # Upload the new file
                 dest_path = f"{clean_folder}/{file_name}"
