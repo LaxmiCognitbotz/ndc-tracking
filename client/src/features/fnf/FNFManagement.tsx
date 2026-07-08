@@ -247,19 +247,24 @@ export function FNFManagement() {
 
       {/* KPI Cards */}
       <div id="section-fnf-kpis" className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-        {kpiCards.map(({ type, label, value, icon: Icon, color }) => (
-          <div
-            key={type}
-            onClick={() => handleKPIClick(type)}
-            className="bg-card rounded-[4px] p-5 border border-border cursor-pointer hover:scale-105 transition-transform duration-200 h-[110px] flex flex-col justify-between"
-          >
-            <div className="flex items-start justify-between gap-2">
-              <span className="text-sm text-muted-foreground leading-tight">{label}</span>
-              <Icon className={`w-5 h-5 flex-shrink-0 ${color}`} />
+        {kpiCards.map(({ type, label, value, icon: Icon, color }) => {
+          const isInteractive = type !== "avgTAT";
+          return (
+            <div
+              key={type}
+              onClick={isInteractive ? () => handleKPIClick(type) : undefined}
+              className={`bg-card rounded-[4px] p-5 border border-border h-[110px] flex flex-col justify-between ${
+                isInteractive ? "cursor-pointer hover:scale-105 transition-transform duration-200" : ""
+              }`}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <span className="text-sm text-muted-foreground leading-tight">{label}</span>
+                <Icon className={`w-5 h-5 flex-shrink-0 ${color}`} />
+              </div>
+              <p className={`text-3xl font-bold ${color}`}>{value}</p>
             </div>
-            <p className={`text-3xl font-bold ${color}`}>{value}</p>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Filters */}
