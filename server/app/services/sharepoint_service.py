@@ -4,19 +4,19 @@ import asyncio
 import msal
 import httpx
 import urllib.parse
+import requests
 from typing import AsyncGenerator, Dict, Any, List, Tuple, Optional
 
 logger = logging.getLogger(__name__)
 
-def get_httpx_client(*args, **kwargs) -> httpx.AsyncClient:
+def _resolve_ssl_verify():
     """
-    Creates an httpx.AsyncClient with SSL verification optionally disabled or customized
-    via environment variables (SHAREPOINT_SSL_VERIFY, SSL_VERIFY, or PROXY_INSECURE_SSL).
-    Also supports custom proxies configured via PROXY_ENABLED and PROXY_URL.
+    Resolves whether SSL verification should be enabled based on environment
+    variables: SHAREPOINT_SSL_VERIFY, SSL_VERIFY, PROXY_INSECURE_SSL.
+    Returns True, False, or a string path to a CA bundle.
     """
-    # 1. SSL Verification
     verify = True
-    
+
     # Check general proxy SSL setting first
     proxy_insecure = os.getenv("PROXY_INSECURE_SSL", "false").lower() in ("true", "1", "yes", "on")
     if proxy_insecure:
@@ -26,7 +26,7 @@ def get_httpx_client(*args, **kwargs) -> httpx.AsyncClient:
     verify_val = os.getenv("SHAREPOINT_SSL_VERIFY")
     if verify_val is None:
         verify_val = os.getenv("SSL_VERIFY")
-        
+
     if verify_val is not None:
         val_lower = verify_val.strip().lower()
         if val_lower in ("false", "0", "no", "off"):
@@ -34,12 +34,31 @@ def get_httpx_client(*args, **kwargs) -> httpx.AsyncClient:
         elif val_lower in ("true", "1", "yes", "on"):
             verify = True
         else:
+            # Treat as path to a custom CA bundle
             verify = verify_val
 
-    if "verify" not in kwargs:
-        kwargs["verify"] = verify
+    return verify
 
-    # 2. Proxy Configuration
+def _get_msal_http_client() -> requests.Session:
+    """
+    Returns a requests.Session with SSL verification settings matching
+    the environment configuration. Used as the http_client for MSAL to
+    ensure token acquisition works behind corporate SSL-intercepting proxies.
+    """
+    session = requests.Session()
+    session.verify = _resolve_ssl_verify()
+    return session
+
+def get_httpx_client(*args, **kwargs) -> httpx.AsyncClient:
+    """
+    Creates an httpx.AsyncClient with SSL verification optionally disabled or customized
+    via environment variables (SHAREPOINT_SSL_VERIFY, SSL_VERIFY, or PROXY_INSECURE_SSL).
+    Also supports custom proxies configured via PROXY_ENABLED and PROXY_URL.
+    """
+    if "verify" not in kwargs:
+        kwargs["verify"] = _resolve_ssl_verify()
+
+    # Proxy Configuration
     proxy_enabled = os.getenv("PROXY_ENABLED", "false").lower() in ("true", "1", "yes", "on")
     proxy_url = os.getenv("PROXY_URL")
     if proxy_enabled and proxy_url and "proxy" not in kwargs:
@@ -104,7 +123,8 @@ class SharePointService:
         app = msal.ConfidentialClientApplication(
             self.client_id,
             authority=self.authority,
-            client_credential=self.client_secret
+            client_credential=self.client_secret,
+            http_client=_get_msal_http_client()
         )
         
         # First check MSAL internal cache
