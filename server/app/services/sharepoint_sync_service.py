@@ -294,7 +294,7 @@ class SharePointSyncService:
 
     async def generate_and_upload_fnf_closed_report(self, db: AsyncSession) -> dict:
         """
-        READ-ONLY: Queries person numbers where is_fnf_closed=True,
+        READ-ONLY: Queries person numbers where ndc_stage='NDC Completed' and is_fnf_closed=False,
         generates an Excel with just those person numbers,
         and uploads it to SharePoint folder 'fnf_closed_report'.
         Does NOT write, update, or delete anything in the database.
@@ -307,16 +307,17 @@ class SharePointSyncService:
         }
 
         try:
-            # ── 1. Read-only SELECT — only person numbers where is_fnf_closed=True ─
+            # ── 1. Read-only SELECT — only person numbers where ndc_stage='NDC Completed' and is_fnf_closed=False ─
             from app.models.ndc_record import NdcRecord
 
             stmt = select(NdcRecord.person_number).where(
-                NdcRecord.is_fnf_closed == True
+                NdcRecord.ndc_stage == "NDC Completed",
+                NdcRecord.is_fnf_closed == False
             ).order_by(NdcRecord.person_number)
             db_result = await db.execute(stmt)
             person_numbers = [row[0] for row in db_result.fetchall()]
             results["records_exported"] = len(person_numbers)
-            logger.info(f"FNF Closed Report: Found {len(person_numbers)} record(s) with is_fnf_closed=True.")
+            logger.info(f"FNF Report: Found {len(person_numbers)} record(s) with ndc_stage='NDC Completed' and is_fnf_closed=False.")
 
             # ── 2. Build Excel workbook (Person Number only) ─────────────────────
             HEADER_FONT = Font(bold=True, color="FFFFFF", size=11)
@@ -331,7 +332,7 @@ class SharePointSyncService:
 
             wb = Workbook()
             ws = wb.active
-            ws.title = "FNF Closed Records"
+            ws.title = "FNF Active Records"
 
             # Single column — Person Number only
             ws.append(["Person Number"])
@@ -354,10 +355,10 @@ class SharePointSyncService:
 
             # ── 3. Upload to SharePoint (timestamped, replaces previous) ─────────
             now_str = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M")
-            file_name = f"FNF_Closed_Report_{now_str}.xlsx"
+            file_name = f"FNF_Active_Report_{now_str}.xlsx"
             results["uploaded_file_name"] = file_name
 
-            upload_subfolder = "F&F_Closed_Report"
+            upload_subfolder = "F&F_Active_Report"
 
             async with get_httpx_client(timeout=120.0) as client:
                 # Resolve site & drive
@@ -385,10 +386,10 @@ class SharePointSyncService:
                 )
                 auth_header = {"Authorization": f"Bearer {token}"}
                 list_resp = await client.get(list_url, headers=auth_header)
-                logger.info(f"FNF Closed Report: List folder status={list_resp.status_code} for '{clean_folder}'")
+                logger.info(f"FNF Active Report: List folder status={list_resp.status_code} for '{clean_folder}'")
                 if list_resp.status_code == 200:
                     existing_items = list_resp.json().get("value", [])
-                    logger.info(f"FNF Closed Report: Found {len(existing_items)} item(s) in folder, cleaning up old .xlsx files...")
+                    logger.info(f"FNF Active Report: Found {len(existing_items)} item(s) in folder, cleaning up old .xlsx files...")
                     for item in existing_items:
                         if "file" in item and item.get("name", "").endswith(".xlsx"):
                             item_id = item["id"]
@@ -399,15 +400,15 @@ class SharePointSyncService:
                             )
                             del_resp = await client.delete(del_url, headers=auth_header)
                             if del_resp.status_code in (200, 204):
-                                logger.info(f"FNF Closed Report: Deleted old file '{item_name}' from SharePoint.")
+                                logger.info(f"FNF Active Report: Deleted old file '{item_name}' from SharePoint.")
                             else:
                                 logger.warning(
-                                    f"FNF Closed Report: Failed to delete '{item_name}' "
+                                    f"FNF Active Report: Failed to delete '{item_name}' "
                                     f"(status {del_resp.status_code}): {del_resp.text}"
                                 )
                 else:
                     logger.warning(
-                        f"FNF Closed Report: Could not list folder '{clean_folder}' "
+                        f"FNF Active Report: Could not list folder '{clean_folder}' "
                         f"(status {list_resp.status_code}): {list_resp.text} — skipping cleanup."
                     )
 
@@ -419,17 +420,17 @@ class SharePointSyncService:
                     f"/root:/{encoded_path}:/content"
                 )
 
-                logger.info(f"FNF Closed Report: Uploading '{file_name}' to '{dest_path}'...")
+                logger.info(f"FNF Active Report: Uploading '{file_name}' to '{dest_path}'...")
                 response = await client.put(upload_url, headers=headers, content=file_bytes)
 
                 if response.status_code in (200, 201):
                     logger.info(
-                        f"FNF Closed Report: Successfully uploaded '{file_name}' "
+                        f"FNF Active Report: Successfully uploaded '{file_name}' "
                         f"({results['records_exported']} records)."
                     )
                 else:
                     err_msg = (
-                        f"FNF Closed Report: Upload failed for '{file_name}'. "
+                        f"FNF Active Report: Upload failed for '{file_name}'. "
                         f"Status {response.status_code}: {response.text}"
                     )
                     logger.error(err_msg)
@@ -437,7 +438,7 @@ class SharePointSyncService:
                     results["errors"].append(err_msg)
 
         except Exception as e:
-            err_msg = f"FNF Closed Report: Unexpected error — {str(e)}"
+            err_msg = f"FNF Active Report: Unexpected error — {str(e)}"
             logger.exception(err_msg)
             results["status"] = "failed"
             results["errors"].append(err_msg)
