@@ -5,7 +5,11 @@ import msal
 import httpx
 import urllib.parse
 import requests
+import urllib3
 from typing import AsyncGenerator, Dict, Any, List, Tuple, Optional
+
+# Suppress insecure request warnings when SSL verification is disabled
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 logger = logging.getLogger(__name__)
 
