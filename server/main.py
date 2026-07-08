@@ -21,23 +21,29 @@ from app.utils.response import (
 )
 from fastapi.exceptions import RequestValidationError
 from fastapi import HTTPException
-from app.utils.scheduler import sharepoint_sync_loop, fnf_completed_sync_loop
+from app.utils.scheduler import sharepoint_sync_loop, fnf_completed_sync_loop, fnf_closed_report_loop
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Start the background tasks
     bg_task = asyncio.create_task(sharepoint_sync_loop())
     fnf_bg_task = asyncio.create_task(fnf_completed_sync_loop())
+    fnf_closed_task = asyncio.create_task(fnf_closed_report_loop())
     yield
     # Cancel the background tasks on shutdown
     bg_task.cancel()
     fnf_bg_task.cancel()
+    fnf_closed_task.cancel()
     try:
         await bg_task
     except asyncio.CancelledError:
         pass
     try:
         await fnf_bg_task
+    except asyncio.CancelledError:
+        pass
+    try:
+        await fnf_closed_task
     except asyncio.CancelledError:
         pass
 

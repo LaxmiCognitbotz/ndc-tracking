@@ -1,9 +1,13 @@
 import os
+import io
 import logging
+import datetime
 from pathlib import Path
 import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from openpyxl import Workbook
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 
 from app.services.sharepoint_service import SharePointService, get_httpx_client
 from app.services.ingest_service import ingest_excel_file
@@ -284,4 +288,140 @@ class SharePointSyncService:
                 results["status"] = "failed"
                 results["errors"].append(err_msg)
                 
+        return results
+
+    async def generate_and_upload_fnf_closed_report(self, db: AsyncSession) -> dict:
+        """
+        Queries all NdcRecords where is_fnf_closed=True, generates an Excel report,
+        and uploads it to the SharePoint folder 'fnf_closed_report' under the base
+        target folder. The file is named:
+            FNF_Closed_Report_YYYY-MM-DD_HH-MM.xlsx
+        """
+        results = {
+            "status": "success",
+            "records_exported": 0,
+            "uploaded_file_name": None,
+            "errors": [],
+        }
+
+        try:
+            # ── 1. Query all FNF-closed records ──────────────────────────────────
+            from app.models.ndc_record import NdcRecord
+
+            stmt = select(NdcRecord).where(NdcRecord.is_fnf_completed == True).order_by(
+                NdcRecord.person_number
+            )
+            db_result = await db.execute(stmt)
+            records = db_result.scalars().all()
+            results["records_exported"] = len(records)
+            logger.info(f"FNF Closed Report: Found {len(records)} record(s) with is_fnf_completed=True.")
+
+            # ── 2. Build Excel workbook (Person Number only) ─────────────────────
+            HEADER_FONT = Font(bold=True, color="FFFFFF", size=11)
+            HEADER_FILL = PatternFill(start_color="2F5496", end_color="2F5496", fill_type="solid")
+            HEADER_ALIGNMENT = Alignment(horizontal="center", vertical="center", wrap_text=True)
+            THIN_BORDER = Border(
+                left=Side(style="thin"),
+                right=Side(style="thin"),
+                top=Side(style="thin"),
+                bottom=Side(style="thin"),
+            )
+
+            wb = Workbook()
+            ws = wb.active
+            ws.title = "FNF Closed Records"
+
+            # Single column — Person Number only
+            ws.append(["Person Number"])
+            header_cell = ws.cell(row=1, column=1)
+            header_cell.font = HEADER_FONT
+            header_cell.fill = HEADER_FILL
+            header_cell.alignment = HEADER_ALIGNMENT
+            header_cell.border = THIN_BORDER
+
+            for r in records:
+                ws.append([r.person_number])
+
+            ws.column_dimensions["A"].width = 20
+
+            # Save to in-memory buffer
+            buf = io.BytesIO()
+            wb.save(buf)
+            buf.seek(0)
+            file_bytes = buf.read()
+
+            # ── 3. Upload to SharePoint (timestamped, replaces previous) ─────────
+            now_str = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M")
+            file_name = f"FNF_Closed_Report_{now_str}.xlsx"
+            results["uploaded_file_name"] = file_name
+
+            upload_subfolder = "fnf_closed_report"
+
+            async with get_httpx_client(timeout=120.0) as client:
+                # Resolve site & drive
+                site_id = await self.sharepoint.get_site_id(client)
+                drive_id, base_folder_path = await self.sharepoint.get_drive_details(client, site_id)
+
+                token = await self.sharepoint.get_access_token()
+                headers = {
+                    "Authorization": f"Bearer {token}",
+                    "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                }
+
+                # Build the folder path
+                if base_folder_path:
+                    folder_path = f"{base_folder_path}/{upload_subfolder}"
+                else:
+                    folder_path = upload_subfolder
+                clean_folder = "/".join([p for p in folder_path.split("/") if p])
+                encoded_folder = self.sharepoint._encode_path_segments(clean_folder)
+
+                # Delete all existing files in the folder before uploading
+                list_url = (
+                    f"https://graph.microsoft.com/v1.0/sites/{site_id}/drives/{drive_id}"
+                    f"/root:/{encoded_folder}:/children"
+                )
+                list_resp = await client.get(list_url, headers={"Authorization": f"Bearer {token}"})
+                if list_resp.status_code == 200:
+                    for item in list_resp.json().get("value", []):
+                        if "file" in item and item.get("name", "").endswith(".xlsx"):
+                            item_id = item["id"]
+                            del_url = (
+                                f"https://graph.microsoft.com/v1.0/sites/{site_id}/drives/{drive_id}"
+                                f"/items/{item_id}"
+                            )
+                            await client.delete(del_url, headers={"Authorization": f"Bearer {token}"})
+                            logger.info(f"FNF Closed Report: Deleted old file '{item['name']}' from SharePoint.")
+
+                # Upload the new file
+                dest_path = f"{clean_folder}/{file_name}"
+                encoded_path = self.sharepoint._encode_path_segments(dest_path)
+                upload_url = (
+                    f"https://graph.microsoft.com/v1.0/sites/{site_id}/drives/{drive_id}"
+                    f"/root:/{encoded_path}:/content"
+                )
+
+                logger.info(f"FNF Closed Report: Uploading '{file_name}' to '{dest_path}'...")
+                response = await client.put(upload_url, headers=headers, content=file_bytes)
+
+                if response.status_code in (200, 201):
+                    logger.info(
+                        f"FNF Closed Report: Successfully uploaded '{file_name}' "
+                        f"({results['records_exported']} records)."
+                    )
+                else:
+                    err_msg = (
+                        f"FNF Closed Report: Upload failed for '{file_name}'. "
+                        f"Status {response.status_code}: {response.text}"
+                    )
+                    logger.error(err_msg)
+                    results["status"] = "failed"
+                    results["errors"].append(err_msg)
+
+        except Exception as e:
+            err_msg = f"FNF Closed Report: Unexpected error — {str(e)}"
+            logger.exception(err_msg)
+            results["status"] = "failed"
+            results["errors"].append(err_msg)
+
         return results
