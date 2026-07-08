@@ -29,7 +29,6 @@ import {
   XCircle,
   Download,
 
-  RefreshCw,
   FolderOpen,
   CalendarIcon,
   Mail,
@@ -399,7 +398,6 @@ export function Overview() {
           <p className="text-muted-foreground mt-2">No Dues Certificate Management System</p>
         </div>
         <div className="flex items-center gap-3">
-          <PPTDownloadButton onDownload={handleDownloadPPT} />
           <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
             <PopoverTrigger asChild>
               <button className="flex items-center gap-2 px-4 py-2 bg-card border border-border rounded-[4px] hover:bg-muted transition-colors text-sm font-medium whitespace-nowrap">
@@ -478,13 +476,14 @@ export function Overview() {
               </div>
             </PopoverContent>
           </Popover>
-          <button
+          <PPTDownloadButton onDownload={handleDownloadPPT} />
+          {/* <button
             onClick={() => toast.info("Syncing data from OpenText...")}
             className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-[4px] hover:bg-primary/90 transition-colors"
           >
             <RefreshCw className="w-4 h-4" />
             Sync
-          </button>
+          </button> */}
         </div>
       </div>
 
