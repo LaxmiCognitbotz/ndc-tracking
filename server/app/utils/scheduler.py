@@ -159,3 +159,64 @@ async def fnf_closed_report_loop():
         except asyncio.CancelledError:
             logger.info("FNF Closed Report Scheduler sleep cancelled.")
             break
+
+
+async def email_automation_loop():
+    """
+    Background polling loop that triggers consolidated daily emails and tomorrow alerts at 10:00 AM.
+    """
+    enabled = os.getenv("EMAIL_AUTOMATION_BACKGROUND_POLL", "true").lower() == "true"
+    if not enabled:
+        logger.info("Email automation background sync is disabled (EMAIL_AUTOMATION_BACKGROUND_POLL=false).")
+        return
+
+    logger.info("Starting Daily Email Automation scheduler. Triggers daily at 10:00 AM.")
+
+    import sys
+    from pathlib import Path
+    server_dir = Path(__file__).parent.parent.parent.resolve()
+    root_dir = server_dir.parent.resolve()
+    email_dir = root_dir / "Email"
+    if str(email_dir) not in sys.path:
+        sys.path.append(str(email_dir))
+
+    try:
+        import importlib
+        mail_module = importlib.import_module("mail")
+        run_10am_job = mail_module.run_10am_job
+        run_tomorrow_alert_job = mail_module.run_tomorrow_alert_job
+    except ImportError as e:
+        logger.error(f"Failed to import mail script functions: {e}")
+        return
+
+    # Store the last successfully triggered date
+    last_trigger_date = None
+
+    while True:
+        try:
+            now = datetime.datetime.now()
+            time_str = now.strftime("%H:%M")
+            date_str = now.strftime("%Y-%m-%d")
+
+            # Check if it is 10:00 AM and we haven't triggered today yet
+            if time_str == "10:00" and date_str != last_trigger_date:
+                logger.info("Background Email Scheduler: 10:00 AM reached. Initiating daily email jobs...")
+                last_trigger_date = date_str
+
+                await run_10am_job()
+                await asyncio.sleep(5)  # Brief pause between tasks to avoid SMTP throttling
+                await run_tomorrow_alert_job()
+                logger.info("Background Email Scheduler: Daily email jobs completed successfully.")
+
+        except asyncio.CancelledError:
+            logger.info("Background Email Scheduler task cancelled.")
+            break
+        except Exception as e:
+            logger.exception(f"Background Email Scheduler: Unexpected error: {e}")
+
+        # Check every 30 seconds
+        try:
+            await asyncio.sleep(30)
+        except asyncio.CancelledError:
+            logger.info("Background Email Scheduler sleep cancelled.")
+            break

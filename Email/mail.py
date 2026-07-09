@@ -20,16 +20,33 @@ sys.path.append(str(server_dir))
 # Ensure we load environment variables for DB and SMTP
 from dotenv import load_dotenv
 local_env = current_dir / ".env"
+server_env = server_dir / ".env"
+parent_env = parent_dir / ".env"
+
 if local_env.exists():
     load_dotenv(dotenv_path=local_env)
+elif server_env.exists():
+    load_dotenv(dotenv_path=server_env)
 else:
-    load_dotenv(dotenv_path=parent_dir / ".env")
+    load_dotenv(dotenv_path=parent_env)
 
-from app.models.ndc_record import NdcRecord
-from app.models.ndc_approval import NdcApproval
-from app.models.email_recipient import EmailRecipient
-from app.models.rm_email_configuration import RmEmailConfiguration
-from database import async_session
+import importlib
+
+# Dynamically import to resolve static IDE path analysis errors
+database_module = importlib.import_module("database")
+async_session = database_module.async_session
+
+ndc_record_module = importlib.import_module("app.models.ndc_record")
+NdcRecord = ndc_record_module.NdcRecord
+
+ndc_approval_module = importlib.import_module("app.models.ndc_approval")
+NdcApproval = ndc_approval_module.NdcApproval
+
+email_recipient_module = importlib.import_module("app.models.email_recipient")
+EmailRecipient = email_recipient_module.EmailRecipient
+
+rm_email_config_module = importlib.import_module("app.models.rm_email_configuration")
+RmEmailConfiguration = rm_email_config_module.RmEmailConfiguration
 
 
 def _fmt_date(d=None):
@@ -48,8 +65,8 @@ def send_email(records, recipient, stage_name, manager_name=None, is_tomorrow=Fa
     smtp_password = os.getenv("SMTP_PASSWORD", "")
     smtp_from = os.getenv("SMTP_FROM", smtp_user)
 
-    if not smtp_user or not smtp_password:
-        print("Error: SMTP credentials (SMTP_USER, SMTP_PASSWORD) not configured in .env")
+    if not smtp_user:
+        print("Error: SMTP_USER not configured in .env")
         return False
 
     if not records:
@@ -136,8 +153,11 @@ td {{padding:14px;border-bottom:1px solid #ececec;}}
     try:
         with smtplib.SMTP(smtp_host, smtp_port, timeout=15) as server:
             server.ehlo()
-            server.starttls()
-            server.login(smtp_user, smtp_password)
+            if "starttls" in server.esmtp_features:
+                server.starttls()
+                server.ehlo()
+            if smtp_password:
+                server.login(smtp_user, smtp_password)
             server.sendmail(smtp_from, [recipient], msg.as_string())
         print(f"Successfully sent {stage_name} email with {len(records)} records to {recipient}.")
         return True
@@ -154,8 +174,8 @@ def send_duplicate_managers_report(records, recipient):
     smtp_password = os.getenv("SMTP_PASSWORD", "")
     smtp_from = os.getenv("SMTP_FROM", smtp_user)
 
-    if not smtp_user or not smtp_password:
-        print("Error: SMTP credentials (SMTP_USER, SMTP_PASSWORD) not configured in .env")
+    if not smtp_user:
+        print("Error: SMTP_USER not configured in .env")
         return False
 
     if not records:
@@ -223,8 +243,11 @@ td {{padding:14px;border-bottom:1px solid #ececec;}}
     try:
         with smtplib.SMTP(smtp_host, smtp_port, timeout=15) as server:
             server.ehlo()
-            server.starttls()
-            server.login(smtp_user, smtp_password)
+            if "starttls" in server.esmtp_features:
+                server.starttls()
+                server.ehlo()
+            if smtp_password:
+                server.login(smtp_user, smtp_password)
             server.sendmail(smtp_from, [recipient], msg.as_string())
         print(f"Successfully sent consolidated duplicate RM report with {len(records)} records to HR ({recipient}).")
         return True
