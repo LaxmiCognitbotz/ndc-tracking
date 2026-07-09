@@ -354,7 +354,7 @@ class SharePointSyncService:
             file_bytes = buf.read()
 
             # ── 3. Upload to SharePoint (timestamped, replaces previous) ─────────
-            now_str = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M")
+            now_str = datetime.datetime.now().strftime("%d_%B_%Y_%I.%M%p")
             file_name = f"FNF_Active_Report_{now_str}.xlsx"
             results["uploaded_file_name"] = file_name
 
