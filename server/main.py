@@ -1,27 +1,32 @@
-import os
 import asyncio
-import uvicorn
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
-from fastapi.middleware.cors import CORSMiddleware
+import os
+
 from dotenv import load_dotenv
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+import uvicorn
+
+from app.routers import common_api, email_api, ff_api, rm_email_configuration_api
+from app.utils.response import (
+    UnifiedJSONResponse,
+    general_exception_handler,
+    http_exception_handler,
+    validation_exception_handler,
+)
+from app.utils.scheduler import (
+    email_automation_loop,
+    fnf_closed_report_loop,
+    fnf_completed_sync_loop,
+    sharepoint_sync_loop,
+)
 
 # Load env variables
 load_dotenv(verbose=True)
 
-from app.routers import ingest, ndc, analytics, export
-from app.auth.jwt_handler import create_access_token
-from app.utils.response import (
-    UnifiedJSONResponse,
-    validation_exception_handler,
-    http_exception_handler,
-    general_exception_handler,
-)
-from fastapi.exceptions import RequestValidationError
-from fastapi import HTTPException
-from app.utils.scheduler import sharepoint_sync_loop, fnf_completed_sync_loop, fnf_closed_report_loop, email_automation_loop
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -53,12 +58,38 @@ async def lifespan(app: FastAPI):
     except asyncio.CancelledError:
         pass
 
+
+tags_metadata = [
+    {
+        "name": "Health Check",
+        "description": "Service health check endpoint.",
+    },
+    {
+        "name": "Exit Clearance & Settlement Operations",
+        "description": "API operations for managing exit clearances (NDC) and Full & Final (F&F) statuses.",
+    },
+    {
+        "name": "Email Notification Management",
+        "description": "Endpoints to view/modify alert recipients and manually trigger reminder/settlement emails.",
+    },
+    {
+        "name": "Settlement Documents (SharePoint)",
+        "description": "Integration to download and stream exit clearance documents from SharePoint folders.",
+    },
+    {
+        "name": "Reporting Manager Email Configurations",
+        "description": "Management of Reporting Manager names and their designated email addresses for automated reminders.",
+    }
+]
+
+
 app = FastAPI(
     title="NDC/GCC Workflow Tracking API",
     version="1.0.0",
     description="Backend API for NDC/GCC workflow tracking and reporting",
     default_response_class=UnifiedJSONResponse,
     lifespan=lifespan,
+    openapi_tags=tags_metadata,
 )
 
 app.add_exception_handler(RequestValidationError, validation_exception_handler)
@@ -73,43 +104,40 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(ingest.router)
-app.include_router(ndc.router)
-app.include_router(analytics.router)
-app.include_router(export.router)
-
-from app.routers import common_api, email_api, ff, rm_email_configuration_api
 app.include_router(common_api.router)
 app.include_router(email_api.router)
-app.include_router(ff.router)
+app.include_router(ff_api.router)
 app.include_router(rm_email_configuration_api.router)
 
 
-
-@app.get("/health")
+@app.get("/health", tags=["Health Check"])
 async def health():
     return {"status": "ok"}
 
 
-@app.post("/auth/dev-token")
-async def dev_token(username: str = "admin"):
-    """Development-only endpoint to generate a JWT for testing."""
-    token = create_access_token({"sub": username, "role": "admin"})
-    return {"access_token": token, "token_type": "bearer"}
-
-
 # --- FRONTEND SPA ROUTING ---
-DIST_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "client", "dist"))
+DIST_DIR = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "client", "dist")
+)
 os.makedirs(DIST_DIR, exist_ok=True)
-print(f"[SPA] DIST_DIR = {DIST_DIR}")
-print(f"[SPA] DIST_DIR exists = {os.path.exists(DIST_DIR)}")
-if os.path.exists(os.path.join(DIST_DIR, "assets")):
-    print(f"[SPA] Assets: {os.listdir(os.path.join(DIST_DIR, 'assets'))}")
 
 # Known static file extensions — never serve index.html for these
 STATIC_EXTENSIONS = {
-    ".js", ".css", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".ico",
-    ".woff", ".woff2", ".ttf", ".eot", ".map", ".json", ".webp",
+    ".js",
+    ".css",
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".gif",
+    ".svg",
+    ".ico",
+    ".woff",
+    ".woff2",
+    ".ttf",
+    ".eot",
+    ".map",
+    ".json",
+    ".webp",
 }
 
 
@@ -120,21 +148,22 @@ def _serve_file_or_404(full_path: str):
 
     # If the file physically exists, serve it
     if full_path and os.path.isfile(file_path):
-        print(f"[SPA] ✅ Serving: {file_path}")
         return FileResponse(file_path)
 
     # If this looks like a static asset but doesn't exist, return 404 (NOT index.html)
     if ext.lower() in STATIC_EXTENSIONS:
-        print(f"[SPA] ❌ Static file NOT FOUND: {file_path}")
-        raise HTTPException(status_code=404, detail=f"Static file not found: {full_path}")
+        raise HTTPException(
+            status_code=404, detail=f"Static file not found: {full_path}"
+        )
 
     # For all other paths (page navigation), serve index.html for React Router
     index_path = os.path.join(DIST_DIR, "index.html")
     if os.path.exists(index_path):
-        print(f"[SPA] 📄 SPA fallback for: /{full_path}")
         return FileResponse(index_path, media_type="text/html")
 
-    raise HTTPException(status_code=404, detail="Frontend build not found. Run npm run build.")
+    raise HTTPException(
+        status_code=404, detail="Frontend build not found. Run npm run build."
+    )
 
 
 @app.get("/")
@@ -149,4 +178,3 @@ async def serve_frontend(full_path: str):
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8010, reload=True)
-

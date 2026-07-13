@@ -1,14 +1,14 @@
 import asyncio
 import os
-from dotenv import load_dotenv
-from database import engine
-from app.models import Base
 
-# Ensure all models are imported so SQLAlchemy registers them on Base
-from app.models.ndc_record import NdcRecord
+from dotenv import load_dotenv
+
+from app.models import Base
 from app.models.ndc_approval import NdcApproval
-from app.models.upload_batch import UploadBatch
+from app.models.ndc_record import NdcRecord
 from app.models.rm_email_configuration import RmEmailConfiguration
+from app.models.upload_batch import UploadBatch
+from config.database import engine
 
 
 async def init_database():

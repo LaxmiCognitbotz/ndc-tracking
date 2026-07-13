@@ -1,7 +1,8 @@
 from datetime import datetime, timedelta, timezone
-from jose import JWTError, jwt
-from dotenv import load_dotenv
 import os
+
+from dotenv import load_dotenv
+from jose import JWTError, jwt
 
 load_dotenv(verbose=True)
 

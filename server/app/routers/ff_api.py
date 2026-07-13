@@ -8,7 +8,7 @@ from app.services.sharepoint_service import SharePointService, get_httpx_client
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/ff", tags=["ff"])
+router = APIRouter(prefix="/api/ff", tags=["Settlement Documents (SharePoint)"])
 
 # Create SharePoint Service instance
 sharepoint_service = SharePointService()

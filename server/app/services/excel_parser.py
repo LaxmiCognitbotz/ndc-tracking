@@ -1,6 +1,10 @@
 """Excel parser — reads .xlsb and .xlsx into a list of row dicts."""
 
+import email
+from email import policy
+import io
 from pathlib import Path
+import warnings
 
 import pandas as pd
 import pyxlsb
@@ -76,12 +80,7 @@ def _read_xlsx(file_path: Path) -> list[dict]:
 
 
 def _read_oracle_mhtml_xls(file_path: Path) -> list[dict]:
-    """Read Oracle Fusion exported MHTML disguised as .xls."""
-    import email
-    from email import policy
-    import io
-    import warnings
-
+    """Read Oracle Fusion exported MHTML disguised as .xls and parse html content."""
     with open(file_path, 'rb') as f:
         msg = email.message_from_binary_file(f, policy=policy.default)
 

@@ -1,17 +1,21 @@
-import os
+import datetime
 import io
 import logging
-import datetime
+import os
 from pathlib import Path
+
 import httpx
+from openpyxl import Workbook
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from openpyxl import Workbook
-from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 
-from app.services.sharepoint_service import SharePointService, get_httpx_client
-from app.services.ingest_service import ingest_excel_file
+from datetime import date
+from app.models.ndc_record import NdcRecord
 from app.models.upload_batch import UploadBatch
+from app.services.common_service import _propagate_department_dates
+from app.services.ingest_service import ingest_excel_file
+from app.services.sharepoint_service import SharePointService, get_httpx_client
 
 logger = logging.getLogger(__name__)
 
@@ -230,10 +234,6 @@ class SharePointSyncService:
                 logger.info(f"Found {len(person_numbers)} F&F folder(s)/file(s) in SharePoint.")
                 
                 # 6. Query and update records
-                from datetime import date
-                from app.models.ndc_record import NdcRecord
-                from app.routers.common_api import _propagate_department_dates
-                
                 # Update matching records to True
                 completed_count = 0
                 if person_numbers:
@@ -308,7 +308,6 @@ class SharePointSyncService:
 
         try:
             # ── 1. Read-only SELECT — only person numbers where ndc_stage='NDC Completed' and is_fnf_closed=False ─
-            from app.models.ndc_record import NdcRecord
 
             stmt = select(NdcRecord.person_number).where(
                 NdcRecord.ndc_stage == "NDC Completed",

@@ -1,14 +1,14 @@
 """Ingest service — validate, normalize, upsert NDC records from parsed Excel rows."""
 
-import logging
 from datetime import date
+import logging
 from pathlib import Path
 
-from sqlalchemy import select, delete
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.ndc_record import NdcRecord
 from app.models.ndc_approval import NdcApproval
+from app.models.ndc_record import NdcRecord
 from app.models.upload_batch import UploadBatch
 from app.services.excel_parser import read_excel
 from app.utils.date_utils import excel_serial_to_date

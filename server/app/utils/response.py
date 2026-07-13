@@ -1,8 +1,10 @@
 import os
+import traceback
 from typing import Any
-from fastapi.responses import JSONResponse
-from fastapi.exceptions import RequestValidationError
+
 from fastapi import HTTPException, status
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 
 
 class UnifiedJSONResponse(JSONResponse):
@@ -79,7 +81,6 @@ async def http_exception_handler(request, exc: HTTPException):
 
 async def general_exception_handler(request, exc: Exception):
     """Handle generic unhandled exceptions to avoid leaking internal tracebacks."""
-    import traceback
     # For development, we print the traceback to stdout/stderr
     print("Unhandled Server Exception:")
     traceback.print_exc()

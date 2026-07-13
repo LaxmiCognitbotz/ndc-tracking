@@ -1,6 +1,7 @@
 from sqlalchemy import (
     Column, Integer, String, DateTime, ForeignKey, Index, func,
 )
+
 from app.models import Base
 
 

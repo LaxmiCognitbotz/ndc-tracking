@@ -1,12 +1,15 @@
-import os
-import logging
 import asyncio
-import msal
-import httpx
+import io
+import logging
+import os
+from typing import Any, AsyncGenerator, Dict, List, Optional, Tuple
 import urllib.parse
+import zipfile
+
+import httpx
+import msal
 import requests
 import urllib3
-from typing import AsyncGenerator, Dict, Any, List, Tuple, Optional
 
 # Suppress insecure request warnings when SSL verification is disabled
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -225,7 +228,8 @@ class SharePointService:
         drives = response.json().get("value", [])
         drive_id = None
         for d in drives:
-            if d.get("name") == drive_name:
+            name = d.get("name")
+            if name == drive_name or (drive_name == "Shared Documents" and name == "Documents") or (drive_name == "Documents" and name == "Shared Documents"):
                 drive_id = d.get("id")
                 break
                 
@@ -336,8 +340,6 @@ class SharePointService:
         logger.info(f"Creating ZIP download stream for {len(files)} files.")
         
         async def zip_stream_generator():
-            import io
-            import zipfile
             
             zip_buffer = io.BytesIO()
             # Compile the zip archive in-memory
@@ -367,4 +369,32 @@ class SharePointService:
                 yield chunk
                 
         return zip_stream_generator(), zip_filename, mime_type
+
+    async def download_employee_documents(
+        self, client: httpx.AsyncClient, person_number: str
+    ) -> Tuple[AsyncGenerator[bytes, None], str, str] | None:
+        """
+        Resolves site, drive, lists employee folder files, and returns the stream, filename, and mime_type.
+        Returns None if no files are found.
+        """
+        # 1. Resolve site ID
+        site_id = await self.get_site_id(client)
+
+        # 2. Resolve drive ID and target folder path
+        drive_id, folder_path = await self.get_drive_details(client, site_id)
+
+        # 3. Locate folder by person number and list files
+        files, resolved_folder = await self.get_person_folder_files(
+            client, site_id, drive_id, folder_path, person_number
+        )
+
+        if not files:
+            return None
+
+        # 4. Stream either the single file or compile all into a zip archive
+        if len(files) == 1:
+            selected_file = files[0]
+            return await self.get_download_stream(selected_file)
+        else:
+            return await self.get_zipped_download_stream(files, person_number)
 

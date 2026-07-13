@@ -1,9 +1,13 @@
-import os
 import asyncio
-import logging
 import datetime
-from database import async_session
+import importlib
+import logging
+import os
+from pathlib import Path
+import sys
+
 from app.services.sharepoint_sync_service import SharePointSyncService
+from config.database import async_session
 
 logger = logging.getLogger(__name__)
 
@@ -172,22 +176,7 @@ async def email_automation_loop():
 
     logger.info("Starting Daily Email Automation scheduler. Triggers daily at 10:00 AM.")
 
-    import sys
-    from pathlib import Path
-    server_dir = Path(__file__).parent.parent.parent.resolve()
-    root_dir = server_dir.parent.resolve()
-    email_dir = root_dir / "Email"
-    if str(email_dir) not in sys.path:
-        sys.path.append(str(email_dir))
-
-    try:
-        import importlib
-        mail_module = importlib.import_module("mail")
-        run_10am_job = mail_module.run_10am_job
-        run_tomorrow_alert_job = mail_module.run_tomorrow_alert_job
-    except ImportError as e:
-        logger.error(f"Failed to import mail script functions: {e}")
-        return
+    from app.services.email_service import run_10am_job, run_tomorrow_alert_job
 
     # Store the last successfully triggered date
     last_trigger_date = None

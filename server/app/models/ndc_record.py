@@ -2,6 +2,7 @@ from sqlalchemy import (
     Column, Integer, BigInteger, String, Date, DateTime, Boolean, CheckConstraint, Index,
     func,
 )
+
 from app.models import Base
 
 
