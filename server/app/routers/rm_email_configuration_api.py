@@ -16,6 +16,10 @@ class RmEmailCreate(BaseModel):
     rm_name: str
     email: str
 
+class RmEmailUpdate(BaseModel):
+    rm_name: str
+    email: str
+
 @router.post("/rm-email-configuration")
 async def create_rm_email_configuration(
     config: RmEmailCreate,
@@ -243,4 +247,42 @@ async def delete_rm_email_configuration(id: int, db: AsyncSession = Depends(get_
     return JSONResponse(content={
         "success": True,
         "message": "Record deleted successfully"
+    })
+
+@router.put("/rm-email-configuration/{id}")
+async def update_rm_email_configuration(
+    id: int,
+    config: RmEmailUpdate,
+    db: AsyncSession = Depends(get_db)
+):
+    email_str = config.email.strip().lower()
+    
+    email_regex = r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
+    if not re.match(email_regex, email_str):
+        raise HTTPException(status_code=400, detail="Invalid email format")
+    
+    res = await db.execute(select(RmEmailConfiguration).where(RmEmailConfiguration.id == id))
+    existing = res.scalar_one_or_none()
+    
+    if not existing:
+        raise HTTPException(status_code=404, detail="RM email configuration not found")
+    
+    # Duplicate check: check if another record with the same email already exists (excluding current record)
+    res_dup = await db.execute(
+        select(RmEmailConfiguration)
+        .where(RmEmailConfiguration.email == email_str)
+        .where(RmEmailConfiguration.id != id)
+    )
+    duplicate = res_dup.scalar_one_or_none()
+    if duplicate:
+        raise HTTPException(status_code=400, detail="RM with this email already exists")
+    
+    existing.rm_name = config.rm_name.strip()
+    existing.email = email_str
+    
+    await db.commit()
+    
+    return JSONResponse(content={
+        "success": True,
+        "message": "RM updated successfully"
     })

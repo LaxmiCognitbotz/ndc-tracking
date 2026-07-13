@@ -12,7 +12,9 @@ import {
   Info,
   X,
   FileSpreadsheet,
-  Plus
+  Plus,
+  Pencil,
+  Mail
 } from "lucide-react";
 
 import {
@@ -79,6 +81,12 @@ export function RMEmailConfigurationPage() {
   const [addForm, setAddForm] = useState({ rm_name: "", email: "" });
   const [addErrors, setAddErrors] = useState({ rm_name: "", email: "" });
   const [isAdding, setIsAdding] = useState(false);
+
+  // Edit RM states
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [editForm, setEditForm] = useState({ id: 0, rm_name: "", email: "" });
+  const [editErrors, setEditErrors] = useState({ rm_name: "", email: "" });
+  const [isEditing, setIsEditing] = useState(false);
 
   // Import file states
   const [fileToUpload, setFileToUpload] = useState<File | null>(null);
@@ -233,6 +241,54 @@ export function RMEmailConfigurationPage() {
       });
   };
 
+  // Edit RM
+  const handleEditSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    // Validation
+    let hasError = false;
+    const errors = { rm_name: "", email: "" };
+    
+    if (!editForm.rm_name.trim()) {
+      errors.rm_name = "RM Name is required";
+      hasError = true;
+    }
+    
+    if (!editForm.email.trim()) {
+      errors.email = "Email is required";
+      hasError = true;
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(editForm.email)) {
+      errors.email = "Invalid email format";
+      hasError = true;
+    }
+    
+    setEditErrors(errors);
+    
+    if (hasError) return;
+    
+    setIsEditing(true);
+    axios.put(`/api/v1/rm-email-configuration/${editForm.id}`, {
+      rm_name: editForm.rm_name,
+      email: editForm.email
+    }, {
+      // @ts-ignore - custom config property
+      skipGlobalToast: true
+    })
+      .then((res) => {
+        toast.success(res.data.message || "RM updated successfully");
+        setIsEditOpen(false);
+        setEditForm({ id: 0, rm_name: "", email: "" });
+        fetchData();
+      })
+      .catch((err) => {
+        const errMsg = err.response?.data?.message || err.response?.data?.detail || err.message || "Failed to update RM";
+        toast.error(errMsg);
+      })
+      .finally(() => {
+        setIsEditing(false);
+      });
+  };
+
   // Delete RM
   const confirmDelete = () => {
     if (configToDelete === null) return;
@@ -317,10 +373,10 @@ export function RMEmailConfigurationPage() {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-muted">
-              <tr className="border-b border-border">
-                <th className="px-6 py-3.5 text-left font-medium text-muted-foreground">RM Name</th>
-                <th className="px-6 py-3.5 text-left font-medium text-muted-foreground">Email</th>
-                <th className="px-6 py-3.5 text-right font-medium text-muted-foreground">Actions</th>
+              <tr>
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground tracking-wide">RM Name</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground tracking-wide">Email</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground tracking-wide">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border bg-card">
@@ -347,17 +403,35 @@ export function RMEmailConfigurationPage() {
                 </tr>
               ) : (
                 data.map((row) => (
-                  <tr key={row.id} className="hover:bg-muted/30 transition-colors">
-                    <td className="px-6 py-4 font-medium text-foreground whitespace-nowrap">{row.rm_name}</td>
-                    <td className="px-6 py-4 text-muted-foreground whitespace-nowrap">{row.email}</td>
-                    <td className="px-6 py-4 text-right whitespace-nowrap">
-                      <button
-                        onClick={() => setConfigToDelete(row.id)}
-                        className="text-red-500 hover:text-red-700 hover:bg-red-50/50 dark:hover:bg-red-950/20 p-2 rounded-[4px] transition-colors"
-                        title="Delete Record"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                  <tr key={row.id} className="hover:bg-muted/50 transition-colors">
+                    <td className="px-4 py-2.5 text-sm font-medium text-foreground whitespace-nowrap">{row.rm_name}</td>
+                    <td className="px-4 py-2.5 text-sm whitespace-nowrap">
+                      <div className="flex items-center gap-2">
+                        <Mail className="w-4 h-4 text-muted-foreground" />
+                        {row.email}
+                      </div>
+                    </td>
+                    <td className="px-4 py-2.5 text-sm whitespace-nowrap">
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => {
+                            setEditForm({ id: row.id, rm_name: row.rm_name, email: row.email });
+                            setEditErrors({ rm_name: "", email: "" });
+                            setIsEditOpen(true);
+                          }}
+                          className="p-1.5 rounded-[4px] bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
+                          title="Edit Record"
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => setConfigToDelete(row.id)}
+                          className="p-1.5 rounded-[4px] bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
+                          title="Delete Record"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -550,6 +624,67 @@ export function RMEmailConfigurationPage() {
               >
                 {isAdding && <Loader2 className="w-4 h-4 animate-spin" />}
                 Add RM
+              </button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit RM Modal */}
+      <Dialog open={isEditOpen} onOpenChange={(open) => !isEditing && setIsEditOpen(open)}>
+        <DialogContent className="max-w-md p-6">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold text-foreground">Edit RM Email</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleEditSubmit} className="space-y-4 pt-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">RM Name <span className="text-red-500">*</span></label>
+              <input
+                type="text"
+                value={editForm.rm_name}
+                onChange={(e) => {
+                  setEditForm({ ...editForm, rm_name: e.target.value });
+                  if (editErrors.rm_name) setEditErrors({ ...editErrors, rm_name: "" });
+                }}
+                className={`w-full px-3 py-2 border rounded-[4px] text-sm bg-input-background focus:outline-none focus:ring-1 ${editErrors.rm_name ? 'border-red-500 focus:ring-red-500' : 'border-border focus:ring-primary'}`}
+                placeholder="Enter RM Name"
+                disabled={isEditing}
+              />
+              {editErrors.rm_name && <p className="text-xs text-red-500">{editErrors.rm_name}</p>}
+            </div>
+            
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">Email <span className="text-red-500">*</span></label>
+              <input
+                type="email"
+                value={editForm.email}
+                onChange={(e) => {
+                  setEditForm({ ...editForm, email: e.target.value });
+                  if (editErrors.email) setEditErrors({ ...editErrors, email: "" });
+                }}
+                className={`w-full px-3 py-2 border rounded-[4px] text-sm bg-input-background focus:outline-none focus:ring-1 ${editErrors.email ? 'border-red-500 focus:ring-red-500' : 'border-border focus:ring-primary'}`}
+                placeholder="Enter Email Address"
+                disabled={isEditing}
+              />
+              {editErrors.email && <p className="text-xs text-red-500">{editErrors.email}</p>}
+            </div>
+            
+            <div className="flex gap-3 justify-end pt-4 border-t border-border mt-6">
+              <button
+                type="button"
+                onClick={() => setIsEditOpen(false)}
+                className="px-4 py-2 border border-border text-foreground hover:bg-muted text-sm font-medium rounded-[4px] transition-colors"
+                disabled={isEditing}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isEditing}
+                className="px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 text-sm font-medium rounded-[4px] transition-colors flex items-center gap-2"
+              >
+                {isEditing && <Loader2 className="w-4 h-4 animate-spin" />}
+                Save Changes
               </button>
             </div>
           </form>

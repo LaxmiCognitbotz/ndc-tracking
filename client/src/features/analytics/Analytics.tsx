@@ -24,7 +24,23 @@ import {
 } from "recharts";
 import { format, parseISO } from "date-fns";
 
-const APPROVAL_DEPT_OPTIONS = ["RM", "IT", "HR", "Security", "Administration", "Safety"];
+const DEPT_STATUS_FIELDS: Record<string, keyof NDCRecord> = {
+  "RM": "rmApprovalStatus",
+  "IT": "itApprovalStatus",
+  "Abex": "abexApprovalStatus",
+  "Telecom": "telecomApprovalStatus",
+  "Store": "storeApprovalStatus",
+  "Safety": "safetyApprovalStatus",
+  "Administration": "administrationApprovalStatus",
+  "Security": "securityApprovalStatus",
+  "HR": "hrApprovalStatus",
+  "GCC HR": "gccHrApprovalStatus",
+  "Business Specific": "businessSpecificApprovalStatus",
+  "Final Abex": "finalAbexApprovalStatus",
+  "Legatrix": "legatrixApprovalStatus",
+};
+
+const APPROVAL_DEPT_OPTIONS = Object.keys(DEPT_STATUS_FIELDS).sort((a, b) => a.localeCompare(b));
 
 export function Analytics() {
   const [mockNDCData, setMockNDCData] = useState<NDCRecord[]>([]);
@@ -46,11 +62,7 @@ export function Analytics() {
   // NDC Status data for Highcharts Pie + Bar
   const ndcChartFilteredData = useMemo(() => {
     if (!ndcChartApprovalFilter) return mockNDCData;
-    const statusMap: Record<string, string> = {
-      'RM': 'rmApprovalStatus', 'IT': 'itApprovalStatus', 'HR': 'hrApprovalStatus',
-      'Security': 'securityApprovalStatus', 'Administration': 'administrationApprovalStatus', 'Safety': 'safetyApprovalStatus',
-    };
-    const field = statusMap[ndcChartApprovalFilter] as keyof NDCRecord;
+    const field = DEPT_STATUS_FIELDS[ndcChartApprovalFilter];
     return field ? mockNDCData.filter((r) => r[field] !== "" && r[field] !== "Not Applicable") : mockNDCData;
   }, [mockNDCData, ndcChartApprovalFilter]);
 
@@ -76,13 +88,13 @@ export function Analytics() {
     legend: { enabled: false },
     plotOptions: {
       pie: {
-        innerSize: "55%",
-        size: "75%",
+        innerSize: "75%",
+        size: "85%",
         showInLegend: false,
         dataLabels: {
           enabled: true,
           format: "{point.name}: {point.y} ({point.percentage:.1f}%)",
-          style: { fontSize: "11px", fontWeight: "normal" },
+          style: { fontSize: "12px", fontWeight: "bold" },
           distance: 14,
         },
       },
@@ -122,13 +134,13 @@ export function Analytics() {
     legend: { enabled: false },
     plotOptions: {
       pie: {
-        innerSize: "55%",
-        size: "75%",
+        innerSize: "75%",
+        size: "85%",
         showInLegend: false,
         dataLabels: {
           enabled: true,
           format: "{point.name}: {point.y} ({point.percentage:.1f}%)",
-          style: { fontSize: "11px", fontWeight: "normal" },
+          style: { fontSize: "12px", fontWeight: "bold" },
           distance: 14,
         },
       },
@@ -143,8 +155,19 @@ export function Analytics() {
   // F&F Analysis
   const fnfAnalysisData = useMemo(() => {
     const getCompletionDays = (record: NDCRecord) => {
-      if (!record.ndcCompletedDate || !record.lastWorkingDate) return null;
-      const completed = new Date(record.ndcCompletedDate);
+      let completedDateStr = record.ndcCompletedDate;
+      if (!completedDateStr) {
+        const approvalDates = Object.keys(record)
+          .filter((k) => k.endsWith("ApprovalDate") && (record as any)[k])
+          .map((k) => (record as any)[k]);
+        if (approvalDates.length > 0) {
+          completedDateStr = approvalDates.sort().reverse()[0];
+        } else {
+          completedDateStr = record.ndcInitiatedDate || record.lastWorkingDate;
+        }
+      }
+      if (!completedDateStr || !record.lastWorkingDate) return null;
+      const completed = new Date(completedDateStr);
       const lastWorking = new Date(record.lastWorkingDate);
       return Math.ceil((completed.getTime() - lastWorking.getTime()) / (1000 * 60 * 60 * 24));
     };
@@ -157,7 +180,13 @@ export function Analytics() {
       "More than 30 days": 0,
     };
 
-    const activeRecords = mockNDCData.filter((r) => r.fnfStatus && r.fnfStatus.trim() !== "");
+    const activeRecords = mockNDCData.filter(
+      (r) =>
+        r.fnfStatus &&
+        (r.fnfStatus === "Closed" ||
+          r.fnfStatus === "Done" ||
+          r.fnfStatus === "Completed")
+    );
     activeRecords.forEach((record) => {
       const days = getCompletionDays(record);
       if (days !== null) {
@@ -198,8 +227,23 @@ export function Analytics() {
     };
 
     mockNDCData.forEach((record) => {
-      if (record.ndcStage !== "NDC Completed" || !record.ndcCompletedDate || !record.ndcInitiatedDate) return;
-      const completed = new Date(record.ndcCompletedDate);
+      if (record.ndcStage !== "NDC Completed") return;
+      
+      let completedDateStr = record.ndcCompletedDate;
+      if (!completedDateStr) {
+        const approvalDates = Object.keys(record)
+          .filter((k) => k.endsWith("ApprovalDate") && (record as any)[k])
+          .map((k) => (record as any)[k]);
+        if (approvalDates.length > 0) {
+          completedDateStr = approvalDates.sort().reverse()[0];
+        } else {
+          completedDateStr = record.ndcInitiatedDate || record.lastWorkingDate;
+        }
+      }
+
+      if (!completedDateStr || !record.ndcInitiatedDate) return;
+
+      const completed = new Date(completedDateStr);
       const initiated = new Date(record.ndcInitiatedDate);
       const days = Math.max(0, Math.ceil((completed.getTime() - initiated.getTime()) / (1000 * 60 * 60 * 24)));
       if (days === 0) cats["On or due date"]++;
@@ -280,36 +324,29 @@ export function Analytics() {
   // Approval Bottleneck
   const bottleneckFilteredData = useMemo(() => {
     if (!bottleneckApprovalFilter) return mockNDCData;
-    const statusMap: Record<string, string> = {
-      'RM': 'rmApprovalStatus', 'IT': 'itApprovalStatus', 'HR': 'hrApprovalStatus',
-      'Security': 'securityApprovalStatus', 'Administration': 'administrationApprovalStatus', 'Safety': 'safetyApprovalStatus',
-    };
-    const field = statusMap[bottleneckApprovalFilter] as keyof NDCRecord;
+    const field = DEPT_STATUS_FIELDS[bottleneckApprovalFilter];
     return field ? mockNDCData.filter((r) => r[field] !== "" && r[field] !== "Not Applicable") : mockNDCData;
   }, [mockNDCData, bottleneckApprovalFilter]);
 
   const approvalBottleneckData = useMemo(() => {
-    const approvals = { RM: 0, IT: 0, HR: 0, Security: 0, Administration: 0, Safety: 0 };
-    bottleneckFilteredData.forEach((record) => {
-      if (record.rmApprovalStatus === "Pending") approvals.RM++;
-      if (record.itApprovalStatus === "Pending") approvals.IT++;
-      if (record.hrApprovalStatus === "Pending") approvals.HR++;
-      if (record.securityApprovalStatus === "Pending") approvals.Security++;
-      if (record.administrationApprovalStatus === "Pending") approvals.Administration++;
-      if (record.safetyApprovalStatus === "Pending") approvals.Safety++;
-    });
+    let result = APPROVAL_DEPT_OPTIONS.map((name) => {
+      const field = DEPT_STATUS_FIELDS[name];
+      const completed = bottleneckFilteredData.filter((r) => r[field] === "Completed").length;
+      const pending = bottleneckFilteredData.filter((r) => r[field] === "Pending").length;
+      
+      const totalActive = completed + pending;
+      const completedPct = totalActive > 0 ? Math.round((completed / totalActive) * 100) : 0;
+      const pendingPct = totalActive > 0 ? 100 - completedPct : 0;
 
-    let result = Object.entries(approvals).map(([name, pending]) => ({
-      name,
-      pending,
-      completed: bottleneckFilteredData.filter((r) => {
-        const m: Record<string, string> = {
-          RM: r.rmApprovalStatus, IT: r.itApprovalStatus, HR: r.hrApprovalStatus,
-          Security: r.securityApprovalStatus, Administration: r.administrationApprovalStatus, Safety: r.safetyApprovalStatus,
-        };
-        return m[name] === "Completed";
-      }).length,
-    }));
+      return {
+        name,
+        pending,
+        completed,
+        totalActive,
+        completedPct,
+        pendingPct,
+      };
+    }).filter((item) => item.totalActive > 0); // Exclude departments with no active (completed or pending) cases
 
     if (bottleneckApprovalFilter) result = result.filter((i) => i.name === bottleneckApprovalFilter);
     return result;
@@ -376,12 +413,84 @@ export function Analytics() {
     return allDelayedCases.slice(0, 10);
   }, [allDelayedCases, topDelayedFilter]);
 
+  const renderInitiatedLabel = (props: any) => {
+    const { x, y, value, index } = props;
+    if (value === undefined || value === null || value <= 0) return <g />;
+
+    const pct = Math.round((value / (totalMonthly || 1)) * 100);
+    if (pct <= 0) return <g />;
+
+    const currentPoint = monthlyTrendData[index];
+    if (!currentPoint) return <g />;
+
+    const initiatedVal = currentPoint.initiated || 0;
+    const completedVal = currentPoint.completed || 0;
+
+    let dy = -10;
+    const diff = Math.abs(initiatedVal - completedVal);
+
+    if (initiatedVal > 0 && completedVal > 0 && diff <= 12) {
+      if (initiatedVal > completedVal) {
+        dy = completedVal <= 8 ? -26 : -14;
+      } else if (completedVal > initiatedVal) {
+        dy = initiatedVal <= 8 ? -10 : 14;
+      } else {
+        dy = -26;
+      }
+    } else {
+      const position = initiatedVal >= completedVal ? "top" : "bottom";
+      dy = (position === "bottom" && initiatedVal <= 8) || position === "top" ? -10 : 14;
+    }
+
+    return (
+      <text x={x} y={y} dy={dy} fill="#1e5a8e" textAnchor="middle" fontSize={12} fontWeight="bold">
+        {pct}%
+      </text>
+    );
+  };
+
+  const renderCompletedLabel = (props: any) => {
+    const { x, y, value, index } = props;
+    if (value === undefined || value === null || value <= 0) return <g />;
+
+    const pct = Math.round((value / (totalMonthly || 1)) * 100);
+    if (pct <= 0) return <g />;
+
+    const currentPoint = monthlyTrendData[index];
+    if (!currentPoint) return <g />;
+
+    const initiatedVal = currentPoint.initiated || 0;
+    const completedVal = currentPoint.completed || 0;
+
+    let dy = -10;
+    const diff = Math.abs(initiatedVal - completedVal);
+
+    if (initiatedVal > 0 && completedVal > 0 && diff <= 12) {
+      if (completedVal > initiatedVal) {
+        dy = initiatedVal <= 8 ? -26 : -14;
+      } else if (initiatedVal > completedVal) {
+        dy = completedVal <= 8 ? -10 : 14;
+      } else {
+        dy = -10;
+      }
+    } else {
+      const position = completedVal >= initiatedVal ? "top" : "bottom";
+      dy = (position === "bottom" && completedVal <= 8) || position === "top" ? -10 : 14;
+    }
+
+    return (
+      <text x={x} y={y} dy={dy} fill="#10b981" textAnchor="middle" fontSize={12} fontWeight="bold">
+        {pct}%
+      </text>
+    );
+  };
+
   const makeCustomBarLabel = (data: { count: number; pct: number }[]) => {
     return ({ x, y, width, index }: any) => {
       const entry = data[index];
       if (!entry || !entry.count) return null;
       return (
-        <text x={Number(x) + Number(width) / 2} y={Number(y) - 8} fill="#374151" textAnchor="middle" fontSize={10} fontWeight="500">
+        <text x={Number(x) + Number(width) / 2} y={Number(y) - 8} fill="#374151" textAnchor="middle" fontSize={12} fontWeight="bold">
           {entry.count} ({entry.pct}%)
         </text>
       );
@@ -444,8 +553,11 @@ export function Analytics() {
             <h4 className="text-sm font-semibold text-muted-foreground mb-2 text-center">NDC Status Pie</h4>
             <div className="relative">
               <HighchartsReact highcharts={Highcharts} options={highchartsPieOptions} />
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <span className="text-2xl font-bold text-gray-900">{totalStatusCount}</span>
+              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider text-center whitespace-nowrap mb-0.5">
+                  Total Employee Exit
+                </span>
+                <span className="text-2xl font-bold text-gray-900 leading-none">{totalStatusCount}</span>
               </div>
             </div>
             {/* Pie legend */}
@@ -465,7 +577,7 @@ export function Analytics() {
               <BarChart data={ndcAnalysisData} margin={{ top: 28, right: 20, left: 5, bottom: 60 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                 <XAxis dataKey="name" stroke="#64748b" tick={{ fontSize: 11 }} interval={0} angle={-35} textAnchor="end" height={70} />
-                <YAxis stroke="#64748b" label={{ value: "Number Of Exit Manpower", angle: -90, position: "insideLeft", offset: 15, style: { fontSize: 10, textAnchor: "middle" } }} allowDecimals={false} />
+                <YAxis stroke="#64748b" label={{ value: "Number of Exited Employees", angle: -90, position: "insideLeft", offset: 15, style: { fontSize: 10, textAnchor: "middle" } }} allowDecimals={false} />
                 <Tooltip formatter={(val: number) => [val, "Count"]} />
                 <Bar dataKey="count" radius={[4, 4, 0, 0]} maxBarSize={55} minPointSize={4} isAnimationActive={true} animationDuration={900}>
                   {ndcAnalysisData.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
@@ -501,8 +613,11 @@ export function Analytics() {
             <h4 className="text-sm font-semibold text-muted-foreground mb-2 text-center">F&amp;F Status Breakdown Pie</h4>
             <div className="relative">
               <HighchartsReact highcharts={Highcharts} options={fnfStatusPieOptions} />
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <span className="text-2xl font-bold text-gray-900">{fnfStatusBreakdownData.total}</span>
+              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider text-center whitespace-nowrap mb-0.5">
+                  Total F&amp;F In Process
+                </span>
+                <span className="text-2xl font-bold text-gray-900 leading-none">{fnfStatusBreakdownData.total}</span>
               </div>
             </div>
             {/* Pie legend */}
@@ -522,7 +637,7 @@ export function Analytics() {
               <BarChart data={fnfAnalysisData} margin={{ top: 28, right: 20, left: 5, bottom: 60 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                 <XAxis dataKey="name" stroke="#64748b" tick={{ fontSize: 11 }} interval={0} angle={-35} textAnchor="end" height={70} />
-                <YAxis stroke="#64748b" label={{ value: "Number Of Exit Manpower", angle: -90, position: "insideLeft", offset: 15, style: { fontSize: 10, textAnchor: "middle" } }} allowDecimals={false} />
+                <YAxis stroke="#64748b" label={{ value: "Number of Exited Employees", angle: -90, position: "insideLeft", offset: 15, style: { fontSize: 10, textAnchor: "middle" } }} allowDecimals={false} />
                 <Tooltip formatter={(val: number) => [val, "Count"]} />
                 <Bar dataKey="count" radius={[4, 4, 0, 0]} maxBarSize={55} minPointSize={4} isAnimationActive={true} animationDuration={900}>
                   {fnfAnalysisData.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
@@ -565,7 +680,7 @@ export function Analytics() {
             </select>
           </div>
         </div>
-        <ResponsiveContainer width="100%" height={320}>
+        <ResponsiveContainer width="100%" height={500}>
           <BarChart
             layout="vertical"
             data={approvalBottleneckData}
@@ -576,8 +691,9 @@ export function Analytics() {
               type="number"
               stroke="#64748b"
               tick={{ fontSize: 12 }}
-              allowDecimals={false}
-              label={{ value: "Number of Cases", position: "insideBottom", offset: -15, style: { fontSize: 12, fill: "#64748b" } }}
+              domain={[0, 100]}
+              tickFormatter={(v) => `${v}%`}
+              label={{ value: "Total Employee", position: "insideBottom", offset: -15, style: { fontSize: 12, fill: "#64748b" } }}
             />
             <YAxis
               type="category"
@@ -587,13 +703,40 @@ export function Analytics() {
               width={90}
               label={{ value: "Approval Department", angle: -90, position: "insideLeft", offset: -80, style: { fontSize: 12, fill: "#64748b", textAnchor: "middle" } }}
             />
-            <Tooltip />
+            <Tooltip
+              formatter={(value: any, name: any, props: any) => {
+                const item = props.payload;
+                if (name === "Completed") {
+                  return [`${item.completed} cases (${value}%)`, name];
+                }
+                if (name === "Pending") {
+                  return [`${item.pending} cases (${value}%)`, name];
+                }
+                return [`${value}%`, name];
+              }}
+            />
             <Legend verticalAlign="top" />
-            <Bar dataKey="completed" stackId="a" fill="#10b981" name="Completed" maxBarSize={40} isAnimationActive={true} animationDuration={800}>
-              <LabelList dataKey="completed" position="insideRight" style={{ fill: "white", fontSize: 11, fontWeight: 600 }} formatter={(v: number) => v > 0 ? v : ""} />
+            <Bar dataKey="completedPct" stackId="a" fill="#10b981" name="Completed" maxBarSize={40} isAnimationActive={true} animationDuration={800}>
+              <LabelList 
+                valueAccessor={(entry: any) => {
+                  const pct = entry?.payload?.completedPct ?? entry?.completedPct ?? 0;
+                  const count = entry?.payload?.completed ?? entry?.completed ?? 0;
+                  return pct > 5 ? `${count} (${pct}%)` : "";
+                }}
+                position="insideRight" 
+                style={{ fill: "white", fontSize: 12, fontWeight: "bold" }} 
+              />
             </Bar>
-            <Bar dataKey="pending" stackId="a" fill="#ef4444" name="Pending" radius={[0, 4, 4, 0]} maxBarSize={40} isAnimationActive={true} animationDuration={800} animationBegin={400}>
-              <LabelList dataKey="pending" position="insideRight" style={{ fill: "white", fontSize: 11, fontWeight: 600 }} formatter={(v: number) => v > 0 ? v : ""} />
+            <Bar dataKey="pendingPct" stackId="a" fill="#ef4444" name="Pending" radius={[0, 4, 4, 0]} maxBarSize={40} isAnimationActive={true} animationDuration={800} animationBegin={200}>
+              <LabelList 
+                valueAccessor={(entry: any) => {
+                  const pct = entry?.payload?.pendingPct ?? entry?.pendingPct ?? 0;
+                  const count = entry?.payload?.pending ?? entry?.pending ?? 0;
+                  return pct > 5 ? `${count} (${pct}%)` : "";
+                }}
+                position="insideRight" 
+                style={{ fill: "white", fontSize: 12, fontWeight: "bold" }} 
+              />
             </Bar>
           </BarChart>
         </ResponsiveContainer>
@@ -613,8 +756,8 @@ export function Analytics() {
             />
             <Tooltip labelFormatter={(label) => label} />
             <Legend />
-            <Line type="monotone" dataKey="initiated" stroke="#1e5a8e" name="NDC initiated" strokeWidth={3} dot={{ r: 4 }} isAnimationActive={true} animationDuration={1000} label={{ position: "top", fontSize: 10, fill: "#1e5a8e", formatter: (v: number) => v > 0 ? `${Math.round((v / (totalMonthly || 1)) * 100)}%` : "" }} />
-            <Line type="monotone" dataKey="completed" stroke="#10b981" name="NDC completed" strokeWidth={3} dot={{ r: 4 }} isAnimationActive={true} animationDuration={1000} animationBegin={300} label={{ position: "bottom", fontSize: 10, fill: "#10b981", formatter: (v: number) => v > 0 ? `${Math.round((v / (totalMonthly || 1)) * 100)}%` : "" }} />
+            <Line type="monotone" dataKey="initiated" stroke="#1e5a8e" name="NDC initiated" strokeWidth={3} dot={{ r: 4 }} isAnimationActive={true} animationDuration={1000} label={renderInitiatedLabel} />
+            <Line type="monotone" dataKey="completed" stroke="#10b981" name="NDC completed" strokeWidth={3} dot={{ r: 4 }} isAnimationActive={true} animationDuration={1000} animationBegin={300} label={renderCompletedLabel} />
           </LineChart>
         </ResponsiveContainer>
       </div>
@@ -651,7 +794,7 @@ export function Analytics() {
                 return <circle key={index} cx={cx} cy={cy} r={6} fill={color} stroke="white" strokeWidth={2} />;
               }}
               stroke="#1e5a8e"
-              label={{ position: "top", fontSize: 11, fill: "#374151", formatter: (v: number) => v > 0 ? v : "" }}
+              label={{ position: "top", offset: 14, fontSize: 13, fontWeight: "bold", fill: "#374151", formatter: (v: number) => v > 0 ? v : "" }}
             />
           </LineChart>
         </ResponsiveContainer>
@@ -702,7 +845,7 @@ export function Analytics() {
                 return <circle key={index} cx={cx} cy={cy} r={6} fill={color} stroke="white" strokeWidth={2} />;
               }}
               stroke="#1e5a8e"
-              label={{ position: "top", fontSize: 11, fill: "#374151", formatter: (v: number) => v > 0 ? v : "" }}
+              label={{ position: "top", offset: 14, fontSize: 13, fontWeight: "bold", fill: "#374151", formatter: (v: number) => v > 0 ? v : "" }}
             />
           </LineChart>
         </ResponsiveContainer>

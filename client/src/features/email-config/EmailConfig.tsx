@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import axios from "../../lib/axios";
-import { Mail, Plus, Trash2, Pencil, Check, X } from "lucide-react";
+import { Mail, Plus, Trash2, Pencil, Check, X, ChevronLeft, ChevronRight, Search } from "lucide-react";
 import { LoadingScreen } from "../../components/common/LoadingScreen";
 import { toast } from "sonner";
 import {
@@ -13,6 +13,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "../../components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "../../components/ui/dialog";
 
 interface EmailRecipient {
   id: string;
@@ -57,6 +63,34 @@ export function EmailConfig() {
 
   // Saving spinner for inline edit
   const [isSaving, setIsSaving] = useState(false);
+
+  // Pagination states
+  const [page, setPage] = useState(1);
+  const limit = 10;
+
+  // Search state
+  const [search, setSearch] = useState("");
+
+  // Filter search
+  const filteredRecipients = recipients.filter((r) => {
+    const term = search.toLowerCase();
+    return (
+      r.name.toLowerCase().includes(term) ||
+      r.email.toLowerCase().includes(term) ||
+      r.department.toLowerCase().includes(term) ||
+      (r.role || "").toLowerCase().includes(term)
+    );
+  });
+
+  // Pagination calculation
+  const totalPages = Math.ceil(filteredRecipients.length / limit);
+  const paginatedRecipients = filteredRecipients.slice((page - 1) * limit, page * limit);
+
+  useEffect(() => {
+    if (page > totalPages && totalPages > 0) {
+      setPage(totalPages);
+    }
+  }, [filteredRecipients.length, totalPages, page]);
 
   useEffect(() => {
     fetchData();
@@ -161,90 +195,39 @@ export function EmailConfig() {
         <p className="text-muted-foreground mt-2">Manage Email Recipients for NDC Notifications</p>
       </div>
 
-      <div className="bg-card rounded-[4px] p-6 border border-border">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-bold">Email Recipients</h3>
+      <div className="bg-card rounded-[4px] border border-border flex flex-col overflow-hidden">
+        {/* Table Controls */}
+        <div className="p-4 border-b border-border bg-muted/20 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="relative flex-1 max-w-sm">
+            <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+            <input
+              type="text"
+              placeholder="Search by Name, Email or Department..."
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(1);
+              }}
+              className="pl-9 pr-4 py-2 w-full border border-border rounded-[4px] bg-input-background focus:outline-none focus:ring-1 focus:ring-primary text-sm placeholder:text-muted-foreground"
+            />
+            {search && (
+              <button
+                onClick={() => setSearch("")}
+                className="absolute right-3 top-3 text-muted-foreground hover:text-foreground"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+          
           <button
             onClick={() => { setIsAdding(!isAdding); setNewRecipient(EMPTY_FORM); }}
-            className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-[4px] hover:bg-primary/90 transition-colors text-sm"
+            className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground text-sm font-medium rounded-[4px] transition-colors shadow-sm shrink-0"
           >
             <Plus className="w-4 h-4" />
             Add Recipient
           </button>
         </div>
-
-        {/* Add form */}
-        {isAdding && (
-          <div className="mb-6 p-4 bg-muted rounded-[4px] space-y-4 border border-border">
-            <h4 className="font-semibold text-sm">Add New Recipient</h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-1">
-                  Name <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={newRecipient.name}
-                  onChange={(e) => setNewRecipient({ ...newRecipient, name: e.target.value })}
-                  className="w-full px-3 py-2 border border-border rounded-[4px] bg-input-background focus:outline-none focus:ring-2 focus:ring-primary text-sm"
-                  placeholder="Enter name"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-1">
-                  Email <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="email"
-                  value={newRecipient.email}
-                  onChange={(e) => setNewRecipient({ ...newRecipient, email: e.target.value })}
-                  className="w-full px-3 py-2 border border-border rounded-[4px] bg-input-background focus:outline-none focus:ring-2 focus:ring-primary text-sm"
-                  placeholder="email@adani.com"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-1">
-                  Department <span className="text-red-500">*</span>
-                </label>
-                <select
-                  value={newRecipient.department}
-                  onChange={(e) => setNewRecipient({ ...newRecipient, department: e.target.value })}
-                  className="w-full px-3 py-2 border border-border rounded-[4px] bg-input-background focus:outline-none focus:ring-2 focus:ring-primary text-sm"
-                >
-                  <option value="">Select Department</option>
-                  {DEPARTMENTS.map((dept) => (
-                    <option key={dept} value={dept}>{dept}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-1">Role</label>
-                <input
-                  type="text"
-                  value={newRecipient.role}
-                  onChange={(e) => setNewRecipient({ ...newRecipient, role: e.target.value })}
-                  className="w-full px-3 py-2 border border-border rounded-[4px] bg-input-background focus:outline-none focus:ring-2 focus:ring-primary text-sm"
-                  placeholder="e.g., Manager, Head"
-                />
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={handleAddRecipient}
-                className="px-4 py-2 bg-primary text-primary-foreground rounded-[4px] hover:bg-primary/90 transition-colors text-sm"
-              >
-                Add Recipient
-              </button>
-              <button
-                onClick={() => { setIsAdding(false); setNewRecipient(EMPTY_FORM); }}
-                className="px-4 py-2 bg-muted text-foreground rounded-[4px] hover:bg-muted/80 transition-colors border border-border text-sm"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        )}
 
         {/* Table */}
         <div className="overflow-x-auto">
@@ -259,121 +242,87 @@ export function EmailConfig() {
               </tr>
             </thead>
             <tbody className="bg-card divide-y divide-border">
-              {recipients.map((recipient) => {
-                const isEditing = editingId === recipient.id;
+              {paginatedRecipients.map((recipient) => {
                 return (
-                  <tr key={recipient.id} className={`transition-colors ${isEditing ? "bg-blue-50/60 dark:bg-blue-900/10" : "hover:bg-muted/50"}`}>
+                  <tr key={recipient.id} className="hover:bg-muted/50 transition-colors">
                     {/* Name */}
-                    <td className="px-4 py-2.5 text-sm font-medium">
-                      {isEditing ? (
-                        <input
-                          type="text"
-                          value={editDraft.name}
-                          onChange={(e) => setEditDraft({ ...editDraft, name: e.target.value })}
-                          className="w-full px-2 py-1 border border-border rounded-[4px] bg-background focus:outline-none focus:ring-2 focus:ring-primary text-sm"
-                        />
-                      ) : recipient.name}
+                    <td className="px-4 py-2.5 text-sm font-medium text-foreground">
+                      {recipient.name}
                     </td>
                     {/* Email */}
                     <td className="px-4 py-2.5 text-sm">
-                      {isEditing ? (
-                        <input
-                          type="email"
-                          value={editDraft.email}
-                          onChange={(e) => setEditDraft({ ...editDraft, email: e.target.value })}
-                          className="w-full px-2 py-1 border border-border rounded-[4px] bg-background focus:outline-none focus:ring-2 focus:ring-primary text-sm"
-                        />
-                      ) : (
-                        <div className="flex items-center gap-2">
-                          <Mail className="w-4 h-4 text-muted-foreground" />
-                          {recipient.email}
-                        </div>
-                      )}
+                      <div className="flex items-center gap-2">
+                        <Mail className="w-4 h-4 text-muted-foreground" />
+                        {recipient.email}
+                      </div>
                     </td>
                     {/* Department */}
                     <td className="px-4 py-2.5 text-sm">
-                      {isEditing ? (
-                        <select
-                          value={editDraft.department}
-                          onChange={(e) => setEditDraft({ ...editDraft, department: e.target.value })}
-                          className="w-full px-2 py-1 border border-border rounded-[4px] bg-background focus:outline-none focus:ring-2 focus:ring-primary text-sm"
-                        >
-                          <option value="">Select Department</option>
-                          {DEPARTMENTS.map((dept) => (
-                            <option key={dept} value={dept}>{dept}</option>
-                          ))}
-                        </select>
-                      ) : (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-[4px] text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200">
-                          {recipient.department}
-                        </span>
-                      )}
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-[4px] text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200">
+                        {recipient.department}
+                      </span>
                     </td>
                     {/* Role */}
                     <td className="px-4 py-2.5 text-sm text-muted-foreground">
-                      {isEditing ? (
-                        <input
-                          type="text"
-                          value={editDraft.role}
-                          onChange={(e) => setEditDraft({ ...editDraft, role: e.target.value })}
-                          className="w-full px-2 py-1 border border-border rounded-[4px] bg-background focus:outline-none focus:ring-2 focus:ring-primary text-sm"
-                          placeholder="e.g., Manager"
-                        />
-                      ) : (recipient.role || "—")}
+                      {recipient.role || "—"}
                     </td>
                     {/* Actions */}
                     <td className="px-4 py-2.5 text-sm">
-                      {isEditing ? (
-                        <div className="flex items-center gap-1.5">
-                          <button
-                            onClick={saveEdit}
-                            disabled={isSaving}
-                            className="flex items-center gap-1 px-3 py-1.5 rounded-[4px] bg-primary text-primary-foreground hover:bg-primary/90 transition-colors text-xs font-medium disabled:opacity-50"
-                            title="Save changes"
-                          >
-                            <Check className="w-3.5 h-3.5" />
-                            {isSaving ? "Saving…" : "Save"}
-                          </button>
-                          <button
-                            onClick={cancelEdit}
-                            className="flex items-center gap-1 px-3 py-1.5 rounded-[4px] bg-muted text-foreground hover:bg-muted/80 border border-border transition-colors text-xs font-medium"
-                            title="Cancel"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                            Cancel
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-1.5">
-                          <button
-                            onClick={() => startEdit(recipient)}
-                            className="p-1.5 rounded-[4px] bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
-                            title="Edit Recipient"
-                          >
-                            <Pencil className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => setRecipientToDelete(recipient.id)}
-                            className="p-1.5 rounded-[4px] bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
-                            title="Remove Recipient"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      )}
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => startEdit(recipient)}
+                          className="p-1.5 rounded-[4px] bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
+                          title="Edit Recipient"
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => setRecipientToDelete(recipient.id)}
+                          className="p-1.5 rounded-[4px] bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
+                          title="Remove Recipient"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
               })}
-              {recipients.length === 0 && (
+              {filteredRecipients.length === 0 && (
                 <tr>
                   <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground text-sm">
-                    No recipients configured. Click "Add Recipient" to get started.
+                    {search ? "No recipients match your search." : "No recipients configured. Click \"Add Recipient\" to get started."}
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Client-side Pagination */}
+        <div className="px-6 py-4 border-t border-border flex items-center justify-between bg-card">
+          <div className="text-sm text-muted-foreground">
+            Showing {filteredRecipients.length > 0 ? (page - 1) * limit + 1 : 0} to {Math.min(page * limit, filteredRecipients.length)} of {filteredRecipients.length} records
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+              disabled={page === 1}
+              className="p-2 rounded-[4px] border border-border hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed text-foreground bg-card"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <span className="text-sm text-foreground">
+              Page {page} of {totalPages || 1}
+            </span>
+            <button
+              onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+              disabled={page === totalPages || totalPages === 0}
+              className="p-2 rounded-[4px] border border-border hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed text-foreground bg-card"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -394,6 +343,168 @@ export function EmailConfig() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Add Recipient Modal */}
+      <Dialog open={isAdding} onOpenChange={(open) => {
+        setIsAdding(open);
+        if (!open) setNewRecipient(EMPTY_FORM);
+      }}>
+        <DialogContent className="max-w-md p-6 bg-card border border-border">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold text-foreground">Add Recipient</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">
+                Name <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={newRecipient.name}
+                onChange={(e) => setNewRecipient({ ...newRecipient, name: e.target.value })}
+                className="w-full px-3 py-2 border border-border rounded-[4px] bg-input-background focus:outline-none focus:ring-1 focus:ring-primary text-sm text-foreground"
+                placeholder="Enter name"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">
+                Email <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="email"
+                value={newRecipient.email}
+                onChange={(e) => setNewRecipient({ ...newRecipient, email: e.target.value })}
+                className="w-full px-3 py-2 border border-border rounded-[4px] bg-input-background focus:outline-none focus:ring-1 focus:ring-primary text-sm text-foreground"
+                placeholder="email@adani.com"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">
+                Department <span className="text-red-500">*</span>
+              </label>
+              <select
+                value={newRecipient.department}
+                onChange={(e) => setNewRecipient({ ...newRecipient, department: e.target.value })}
+                className="w-full px-3 py-2 border border-border rounded-[4px] bg-input-background focus:outline-none focus:ring-1 focus:ring-primary text-sm text-foreground"
+              >
+                <option value="">Select Department</option>
+                {DEPARTMENTS.map((dept) => (
+                  <option key={dept} value={dept}>{dept}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">Role</label>
+              <input
+                type="text"
+                value={newRecipient.role}
+                onChange={(e) => setNewRecipient({ ...newRecipient, role: e.target.value })}
+                className="w-full px-3 py-2 border border-border rounded-[4px] bg-input-background focus:outline-none focus:ring-1 focus:ring-primary text-sm text-foreground"
+                placeholder="e.g., Manager, Head"
+              />
+            </div>
+
+            <div className="flex gap-3 justify-end pt-4 border-t border-border mt-6">
+              <button
+                type="button"
+                onClick={() => { setIsAdding(false); setNewRecipient(EMPTY_FORM); }}
+                className="px-4 py-2 border border-border text-foreground hover:bg-muted text-sm font-medium rounded-[4px] transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleAddRecipient}
+                className="px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90 text-sm font-medium rounded-[4px] transition-colors"
+              >
+                Add Recipient
+              </button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Recipient Modal */}
+      <Dialog open={editingId !== null} onOpenChange={(open) => { if (!open) cancelEdit(); }}>
+        <DialogContent className="max-w-md p-6 bg-card border border-border">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold text-foreground">Edit Recipient</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">
+                Name <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={editDraft.name}
+                onChange={(e) => setEditDraft({ ...editDraft, name: e.target.value })}
+                className="w-full px-3 py-2 border border-border rounded-[4px] bg-input-background focus:outline-none focus:ring-1 focus:ring-primary text-sm text-foreground"
+                placeholder="Enter name"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">
+                Email <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="email"
+                value={editDraft.email}
+                onChange={(e) => setEditDraft({ ...editDraft, email: e.target.value })}
+                className="w-full px-3 py-2 border border-border rounded-[4px] bg-input-background focus:outline-none focus:ring-1 focus:ring-primary text-sm text-foreground"
+                placeholder="email@adani.com"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">
+                Department <span className="text-red-500">*</span>
+              </label>
+              <select
+                value={editDraft.department}
+                onChange={(e) => setEditDraft({ ...editDraft, department: e.target.value })}
+                className="w-full px-3 py-2 border border-border rounded-[4px] bg-input-background focus:outline-none focus:ring-1 focus:ring-primary text-sm text-foreground"
+              >
+                <option value="">Select Department</option>
+                {DEPARTMENTS.map((dept) => (
+                  <option key={dept} value={dept}>{dept}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">Role</label>
+              <input
+                type="text"
+                value={editDraft.role}
+                onChange={(e) => setEditDraft({ ...editDraft, role: e.target.value })}
+                className="w-full px-3 py-2 border border-border rounded-[4px] bg-input-background focus:outline-none focus:ring-1 focus:ring-primary text-sm text-foreground"
+                placeholder="e.g., Manager, Head"
+              />
+            </div>
+
+            <div className="flex gap-3 justify-end pt-4 border-t border-border mt-6">
+              <button
+                type="button"
+                onClick={cancelEdit}
+                className="px-4 py-2 border border-border text-foreground hover:bg-muted text-sm font-medium rounded-[4px] transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={saveEdit}
+                disabled={isSaving}
+                className="px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 text-sm font-medium rounded-[4px] transition-colors flex items-center gap-2"
+              >
+                {isSaving ? "Saving…" : "Save Changes"}
+              </button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
