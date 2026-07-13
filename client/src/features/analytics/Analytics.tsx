@@ -42,6 +42,42 @@ const DEPT_STATUS_FIELDS: Record<string, keyof NDCRecord> = {
 
 const APPROVAL_DEPT_OPTIONS = Object.keys(DEPT_STATUS_FIELDS).sort((a, b) => a.localeCompare(b));
 
+const getFnfCompletionDays = (record: NDCRecord) => {
+  let completedDateStr = record.ndcCompletedDate;
+  if (!completedDateStr) {
+    const approvalDates = Object.keys(record)
+      .filter((k) => k.endsWith("ApprovalDate") && (record as any)[k])
+      .map((k) => (record as any)[k]);
+    if (approvalDates.length > 0) {
+      completedDateStr = approvalDates.sort().reverse()[0];
+    } else {
+      completedDateStr = record.ndcInitiatedDate || record.lastWorkingDate;
+    }
+  }
+  if (!completedDateStr || !record.lastWorkingDate) return null;
+  const completed = new Date(completedDateStr);
+  const lastWorking = new Date(record.lastWorkingDate);
+  return Math.ceil((completed.getTime() - lastWorking.getTime()) / (1000 * 60 * 60 * 24));
+};
+
+const getNdcCompletionDays = (record: NDCRecord) => {
+  let completedDateStr = record.ndcCompletedDate;
+  if (!completedDateStr) {
+    const approvalDates = Object.keys(record)
+      .filter((k) => k.endsWith("ApprovalDate") && (record as any)[k])
+      .map((k) => (record as any)[k]);
+    if (approvalDates.length > 0) {
+      completedDateStr = approvalDates.sort().reverse()[0];
+    } else {
+      completedDateStr = record.ndcInitiatedDate || record.lastWorkingDate;
+    }
+  }
+  if (!completedDateStr || !record.ndcInitiatedDate) return null;
+  const completed = new Date(completedDateStr);
+  const initiated = new Date(record.ndcInitiatedDate);
+  return Math.max(0, Math.ceil((completed.getTime() - initiated.getTime()) / (1000 * 60 * 60 * 24)));
+};
+
 export function Analytics() {
   const [mockNDCData, setMockNDCData] = useState<NDCRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -154,24 +190,6 @@ export function Analytics() {
 
   // F&F Analysis
   const fnfAnalysisData = useMemo(() => {
-    const getCompletionDays = (record: NDCRecord) => {
-      let completedDateStr = record.ndcCompletedDate;
-      if (!completedDateStr) {
-        const approvalDates = Object.keys(record)
-          .filter((k) => k.endsWith("ApprovalDate") && (record as any)[k])
-          .map((k) => (record as any)[k]);
-        if (approvalDates.length > 0) {
-          completedDateStr = approvalDates.sort().reverse()[0];
-        } else {
-          completedDateStr = record.ndcInitiatedDate || record.lastWorkingDate;
-        }
-      }
-      if (!completedDateStr || !record.lastWorkingDate) return null;
-      const completed = new Date(completedDateStr);
-      const lastWorking = new Date(record.lastWorkingDate);
-      return Math.ceil((completed.getTime() - lastWorking.getTime()) / (1000 * 60 * 60 * 24));
-    };
-
     const cats = {
       "On or due date": 0,
       "Within 2 days": 0,
@@ -188,7 +206,7 @@ export function Analytics() {
           r.fnfStatus === "Completed")
     );
     activeRecords.forEach((record) => {
-      const days = getCompletionDays(record);
+      const days = getFnfCompletionDays(record);
       if (days !== null) {
         const abs = Math.abs(days);
         if (abs === 0) cats["On or due date"]++;
@@ -229,23 +247,9 @@ export function Analytics() {
     mockNDCData.forEach((record) => {
       if (record.ndcStage !== "NDC Completed") return;
       
-      let completedDateStr = record.ndcCompletedDate;
-      if (!completedDateStr) {
-        const approvalDates = Object.keys(record)
-          .filter((k) => k.endsWith("ApprovalDate") && (record as any)[k])
-          .map((k) => (record as any)[k]);
-        if (approvalDates.length > 0) {
-          completedDateStr = approvalDates.sort().reverse()[0];
-        } else {
-          completedDateStr = record.ndcInitiatedDate || record.lastWorkingDate;
-        }
-      }
+      const days = getNdcCompletionDays(record);
+      if (days === null) return;
 
-      if (!completedDateStr || !record.ndcInitiatedDate) return;
-
-      const completed = new Date(completedDateStr);
-      const initiated = new Date(record.ndcInitiatedDate);
-      const days = Math.max(0, Math.ceil((completed.getTime() - initiated.getTime()) / (1000 * 60 * 60 * 24)));
       if (days === 0) cats["On or due date"]++;
       else if (days <= 2) cats["Within 2 days"]++;
       else if (days <= 7) cats["3–7 days"]++;
@@ -279,17 +283,20 @@ export function Analytics() {
       "More than 30 Days": { count: 0, color: "#ef4444" },
     };
 
-    const activeRecords = mockNDCData.filter((r) => r.fnfStatus && r.fnfStatus.trim() !== "");
+    const activeRecords = mockNDCData.filter(
+      (r) =>
+        r.fnfStatus &&
+        (r.fnfStatus === "Closed" ||
+          r.fnfStatus === "Done" ||
+          r.fnfStatus === "Completed")
+    );
     activeRecords.forEach((record) => {
-      if (!record.ndcCompletedDate || !record.lastWorkingDate) return;
-      const days = Math.ceil(
-        Math.abs(
-          new Date(record.ndcCompletedDate).getTime() - new Date(record.lastWorkingDate).getTime()
-        ) / (1000 * 60 * 60 * 24)
-      );
-      if (days <= 7) cats["Within 7 Days"].count++;
-      else if (days <= 15) cats["Within 15 Days"].count++;
-      else if (days <= 30) cats["Within 30 Days"].count++;
+      const days = getFnfCompletionDays(record);
+      if (days === null) return;
+      const absDays = Math.abs(days);
+      if (absDays <= 7) cats["Within 7 Days"].count++;
+      else if (absDays <= 15) cats["Within 15 Days"].count++;
+      else if (absDays <= 30) cats["Within 30 Days"].count++;
       else cats["More than 30 Days"].count++;
     });
 
@@ -306,12 +313,9 @@ export function Analytics() {
     };
 
     mockNDCData.forEach((record) => {
-      if (record.ndcStage !== "NDC Completed" || !record.ndcCompletedDate || !record.ndcInitiatedDate) return;
-      const days = Math.ceil(
-        Math.max(0,
-          new Date(record.ndcCompletedDate).getTime() - new Date(record.ndcInitiatedDate).getTime()
-        ) / (1000 * 60 * 60 * 24)
-      );
+      if (record.ndcStage !== "NDC Completed") return;
+      const days = getNdcCompletionDays(record);
+      if (days === null) return;
       if (days <= 7) cats["Within 7 Days"].count++;
       else if (days <= 15) cats["Within 15 Days"].count++;
       else if (days <= 30) cats["Within 30 Days"].count++;
