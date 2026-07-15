@@ -25,7 +25,7 @@ export function FullScreenModal({ open, onClose, title, headerActions, children 
   return ReactDOM.createPortal(
     <div
       className="fixed inset-0 flex flex-col bg-background"
-      style={{ zIndex: 9999 }}
+      style={{ zIndex: 40 }}
     >
       {/* Backdrop overlay (for click-outside close) */}
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />

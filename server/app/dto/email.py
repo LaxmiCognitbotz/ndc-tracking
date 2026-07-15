@@ -14,3 +14,9 @@ class EmailRecipientSchema(BaseModel):
 class FnfEmailRequest(BaseModel):
     email: str
     record_id: int
+
+
+class DelayedReminderRequest(BaseModel):
+    email: str
+    type: str | None = "ndc_delayed"
+

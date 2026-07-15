@@ -5,6 +5,20 @@ const api = axios.create({
   baseURL: import.meta.env.BASE_URL, // Resolves to '/ndc/' from vite base config
 });
 
+// Request interceptor for API calls
+api.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem("token");
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
 // Response interceptor for API calls
 api.interceptors.response.use(
   (response) => response,

@@ -3,10 +3,12 @@ import { LayoutDashboard, BarChart3, ChevronLeft, ChevronRight, FileText, Mail, 
 import imgLogo from "../assets/images/image.png";
 import faviconLogo from "../assets/adani-favicon.png";
 import { useSidebar } from "../context/SidebarContext";
+import { useAuth } from "../context/AuthContext";
 
 export function Sidebar() {
   const location = useLocation();
   const { isCollapsed, toggleSidebar } = useSidebar();
+  const { user, ssoEnabled } = useAuth();
 
   const isActive = (path: string) => location.pathname === path;
 
@@ -78,6 +80,18 @@ export function Sidebar() {
           );
         })}
       </div>
+
+      {user && ssoEnabled && !isCollapsed && (
+        <div className="p-4 border-t border-sidebar-border flex flex-col gap-1 bg-sidebar-accent/20">
+          <div className="flex flex-col px-1">
+            <span className="text-sm font-semibold text-sidebar-foreground truncate" title={user.name}>{user.name}</span>
+            <span className="text-xs text-sidebar-foreground/60 truncate" title={user.email}>{user.email}</span>
+            <span className="text-[10px] uppercase font-bold text-teal-400 mt-1">
+              {user.role === "super_admin" ? "Super Admin" : "Admin"}
+            </span>
+          </div>
+        </div>
+      )}
 
       <div className="p-4 border-t border-sidebar-border">
         <button

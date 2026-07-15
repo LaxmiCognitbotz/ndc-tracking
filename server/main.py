@@ -10,7 +10,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 import uvicorn
 
-from app.routers import common_api, email_api, ff_api, rm_email_configuration_api
+from app.routers import common_api, email_api, ff_api, rm_email_configuration_api, auth
 from app.utils.response import (
     UnifiedJSONResponse,
     general_exception_handler,
@@ -30,6 +30,39 @@ load_dotenv(verbose=True)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Seed Super Admins
+    from config.database import async_session
+    from sqlalchemy import select
+    from app.models.ndc_user_access import NdcUserAccess
+    from datetime import datetime, timezone
+
+    super_admin_env = os.getenv("SUPER_ADMIN_EMAIL", "")
+    super_admins = [e.strip().lower() for e in super_admin_env.split(",") if e.strip()]
+
+    async with async_session() as session:
+        for sa_email in super_admins:
+            stmt = select(NdcUserAccess).where(NdcUserAccess.email == sa_email)
+            res = await session.execute(stmt)
+            user_access = res.scalar_one_or_none()
+            if not user_access:
+                print(f"Seeding super admin: {sa_email}")
+                user_access = NdcUserAccess(
+                    email=sa_email,
+                    name=sa_email.split('@')[0],
+                    role="super_admin",
+                    status="approved",
+                    approved_at=datetime.now(timezone.utc).replace(tzinfo=None),
+                    approved_by="system"
+                )
+                session.add(user_access)
+            else:
+                print(f"Ensuring super admin privileges: {sa_email}")
+                user_access.role = "super_admin"
+                user_access.status = "approved"
+                # Update attributes in-place to ensure SQLAlchemy flushes correctly
+                session.add(user_access)
+        await session.commit()
+
     # Start the background tasks
     bg_task = asyncio.create_task(sharepoint_sync_loop())
     fnf_bg_task = asyncio.create_task(fnf_completed_sync_loop())
@@ -108,6 +141,8 @@ app.include_router(common_api.router)
 app.include_router(email_api.router)
 app.include_router(ff_api.router)
 app.include_router(rm_email_configuration_api.router)
+app.include_router(auth.router)
+app.include_router(auth.admin_router)
 
 
 @app.get("/health", tags=["Health Check"])

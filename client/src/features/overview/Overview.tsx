@@ -33,6 +33,7 @@ import {
   CalendarIcon,
   Mail,
   AlertTriangle,
+  Send,
 } from "lucide-react";
 
 export function Overview() {
@@ -91,6 +92,9 @@ export function Overview() {
   const [ndcDelayedCurrentPage, setNdcDelayedCurrentPage] = useState(1);
   const [fnfDelayedCurrentPage, setFnfDelayedCurrentPage] = useState(1);
   const [sendingReminder, setSendingReminder] = useState(false);
+  const [reminderMailDialogOpen, setReminderMailDialogOpen] = useState(false);
+  const [reminderMailEmailTo, setReminderMailEmailTo] = useState("");
+  const [reminderMailType, setReminderMailType] = useState<string>("ndc_delayed");
   const itemsPerPage = 10;
 
   useEffect(() => {
@@ -297,6 +301,7 @@ export function Overview() {
         <div className="p-4 border-b border-border flex items-center justify-between shrink-0 bg-card">
           <h3 className="font-semibold text-foreground">{title} ({data.length})</h3>
           <button
+            disabled={data.length === 0}
             onClick={() => {
               const mappedData = data.map(r => ({
                 "Person No.": r.personNumber,
@@ -307,7 +312,7 @@ export function Overview() {
               }));
               exportToExcel(mappedData, title || "Export");
             }}
-            className="flex items-center gap-2 px-3 py-1.5 bg-primary text-primary-foreground rounded-[4px] hover:bg-primary/90 transition-colors text-sm"
+            className="flex items-center gap-2 px-3 py-1.5 bg-primary text-primary-foreground rounded-[4px] hover:bg-primary/90 transition-colors text-sm disabled:opacity-60 disabled:cursor-not-allowed"
           >
             <Download className="w-3 h-3" />
             Export
@@ -526,7 +531,17 @@ export function Overview() {
         </div>
       </div>
 
-      <DataModal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={modalData.title} data={modalData.data} />
+      <DataModal
+        isOpen={modalOpen}
+        onClose={() => setModalOpen(false)}
+        title={modalData.title}
+        data={modalData.data}
+        onSendReminder={(type) => {
+          setReminderMailEmailTo("");
+          setReminderMailType(type);
+          setReminderMailDialogOpen(true);
+        }}
+      />
 
       {/* Total Employee Exit Count Modal */}
       <FullScreenModal open={totalExitModalOpen} onClose={() => setTotalExitModalOpen(false)} title="Total Employee Exit">
@@ -651,6 +666,72 @@ export function Overview() {
         </DialogContent>
       </Dialog>
 
+      {/* Reminder Mail Dialog */}
+      <Dialog open={reminderMailDialogOpen} onOpenChange={setReminderMailDialogOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Send email</DialogTitle>
+          </DialogHeader>
+          <div className="p-4 space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2">
+                Email ID <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="email"
+                value={reminderMailEmailTo}
+                onChange={(e) => setReminderMailEmailTo(e.target.value)}
+                placeholder="Enter email address"
+                className="w-full px-3 py-2 border border-border rounded-[4px] bg-input-background focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
+            <div className="flex gap-3">
+              <button
+                disabled={sendingReminder}
+                onClick={async () => {
+                  if (!reminderMailEmailTo) {
+                    toast.error("Please enter an email address");
+                    return;
+                  }
+                  setSendingReminder(true);
+                  const toastId = toast.loading(`Sending reminder email to ${reminderMailEmailTo}...`);
+                  try {
+                    const res = await axios.post("/api/v1/send-delayed-reminder", {
+                      email: reminderMailEmailTo,
+                      type: reminderMailType,
+                    });
+                    const data = res.data?.data || res.data;
+                    toast.dismiss(toastId);
+                    toast.success(data?.message || "Reminder email sent successfully!");
+                    setReminderMailDialogOpen(false);
+                    setReminderMailEmailTo("");
+                  } catch (err: any) {
+                    toast.dismiss(toastId);
+                    const detail = err?.response?.data?.detail || err?.message || "Failed to send email";
+                    toast.error(`Email failed: ${detail}`);
+                  } finally {
+                    setSendingReminder(false);
+                  }
+                }}
+                className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-[4px] hover:bg-primary/90 transition-colors flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                <Send className="w-4 h-4" />
+                {sendingReminder ? "Sending..." : "Send"}
+              </button>
+              <button
+                onClick={() => {
+                  setReminderMailDialogOpen(false);
+                  setReminderMailEmailTo("");
+                }}
+                className="px-4 py-2 bg-muted text-foreground rounded-[4px] hover:bg-muted/80 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* NDC Delayed Table Modal */}
       <FullScreenModal
         open={ndcDelayedTableOpen}
@@ -659,26 +740,19 @@ export function Overview() {
         headerActions={
           <div className="flex items-center gap-3">
             <button
-              disabled={sendingReminder}
-              onClick={async () => {
-                setSendingReminder(true);
-                try {
-                  const res = await axios.post("/api/v1/send-delayed-reminder");
-                  const data = res.data?.data || res.data;
-                  toast.success(data?.message || "Reminder email sent successfully!");
-                } catch (err: any) {
-                  const detail = err?.response?.data?.detail || err?.message || "Failed to send email";
-                  toast.error(`Email failed: ${detail}`);
-                } finally {
-                  setSendingReminder(false);
-                }
+              disabled={mockNDCData.filter(isTopDelayed).length === 0}
+              onClick={() => {
+                setReminderMailEmailTo("");
+                setReminderMailType("ndc_delayed");
+                setReminderMailDialogOpen(true);
               }}
-              className="flex items-center gap-2 px-3 py-1.5 bg-primary text-primary-foreground text-sm rounded-[4px] hover:bg-primary/90 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+              className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground text-sm rounded-[4px] hover:bg-primary/90 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
             >
               <Mail className="w-4 h-4" />
-              {sendingReminder ? "Sending..." : "Send Reminder Email"}
+              Send Reminder
             </button>
             <button
+              disabled={mockNDCData.filter(isTopDelayed).length === 0}
               onClick={() => {
                 const allDelayed = mockNDCData.filter(isTopDelayed);
                 const mappedData = allDelayed.map(r => ({
@@ -690,7 +764,7 @@ export function Overview() {
                 }));
                 exportToExcel(mappedData, "NDC_Delayed_Cases");
               }}
-              className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-[4px] hover:bg-primary/90 transition-colors"
+              className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground text-sm rounded-[4px] hover:bg-primary/90 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
             >
               <Download className="w-4 h-4" />
               Export to Excel
@@ -768,51 +842,46 @@ export function Overview() {
         open={fnfDelayedTableOpen}
         onClose={() => setFnfDelayedTableOpen(false)}
         title="F&F Delayed Cases"
-        headerActions={
-          <div className="flex items-center gap-3">
-            <button
-              disabled={sendingReminder}
-              onClick={async () => {
-                setSendingReminder(true);
-                try {
-                  const res = await axios.post("/api/v1/send-delayed-reminder");
-                  const data = res.data?.data || res.data;
-                  toast.success(data?.message || "Reminder email sent successfully!");
-                } catch (err: any) {
-                  const detail = err?.response?.data?.detail || err?.message || "Failed to send email";
-                  toast.error(`Email failed: ${detail}`);
-                } finally {
-                  setSendingReminder(false);
-                }
-              }}
-              className="flex items-center gap-2 px-3 py-1.5 bg-primary text-primary-foreground text-sm rounded-[4px] hover:bg-primary/90 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-            >
-              <Mail className="w-4 h-4" />
-              {sendingReminder ? "Sending..." : "Send Reminder Email"}
-            </button>
-            <button
-              onClick={() => {
-                const fnfDelayedData = mockNDCData.filter((r) => {
-                  if (r.ndcStage !== "NDC Completed" || r.isFnfCompleted) return false;
-                  return Math.ceil((new Date().getTime() - new Date(r.lastWorkingDate).getTime()) / (1000 * 60 * 60 * 24)) > 0;
-                });
-                const mappedData = fnfDelayedData.map(r => ({
-                  "Person Number": r.personNumber,
-                  "Name": r.employeeName,
-                  "Department": r.department,
-                  "Last Working Date": r.lastWorkingDate,
-                  "F&F Status": r.fnfStatus,
-                  "Days Delayed": Math.ceil((new Date().getTime() - new Date(r.lastWorkingDate).getTime()) / (1000 * 60 * 60 * 24))
-                }));
-                exportToExcel(mappedData, "FnF_Delayed_Cases");
-              }}
-              className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-[4px] hover:bg-primary/90 transition-colors"
-            >
-              <Download className="w-4 h-4" />
-              Export to Excel
-            </button>
-          </div>
-        }
+        headerActions={(() => {
+          const fnfDelayedData = mockNDCData.filter((r) => {
+            if (r.ndcStage !== "NDC Completed" || r.isFnfCompleted) return false;
+            return Math.ceil((new Date().getTime() - new Date(r.lastWorkingDate).getTime()) / (1000 * 60 * 60 * 24)) > 0;
+          });
+          return (
+            <div className="flex items-center gap-3">
+              <button
+                disabled={fnfDelayedData.length === 0}
+                onClick={() => {
+                  setReminderMailEmailTo("");
+                  setReminderMailType("ndc_delayed");
+                  setReminderMailDialogOpen(true);
+                }}
+                className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground text-sm rounded-[4px] hover:bg-primary/90 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                <Mail className="w-4 h-4" />
+                Send Reminder
+              </button>
+              <button
+                disabled={fnfDelayedData.length === 0}
+                onClick={() => {
+                  const mappedData = fnfDelayedData.map(r => ({
+                    "Person Number": r.personNumber,
+                    "Name": r.employeeName,
+                    "Department": r.department,
+                    "Last Working Date": r.lastWorkingDate,
+                    "F&F Status": r.fnfStatus,
+                    "Days Delayed": Math.ceil((new Date().getTime() - new Date(r.lastWorkingDate).getTime()) / (1000 * 60 * 60 * 24))
+                  }));
+                  exportToExcel(mappedData, "FnF_Delayed_Cases");
+                }}
+                className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground text-sm rounded-[4px] hover:bg-primary/90 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                <Download className="w-4 h-4" />
+                Export to Excel
+              </button>
+            </div>
+          );
+        })()}
       >
         <div className="flex-1 overflow-auto p-6">
           {(() => {

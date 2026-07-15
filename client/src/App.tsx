@@ -9,6 +9,12 @@ import { SidebarProvider, useSidebar } from "./context/SidebarContext";
 import { Toaster } from "sonner";
 import { GlobalErrorBoundary } from "./components/common/GlobalErrorBoundary";
 
+// Auth context and routes
+import { AuthProvider } from "./context/AuthContext";
+import { ProtectedRoute } from "./components/common/ProtectedRoute";
+import { PendingApproval } from "./features/auth/PendingApproval";
+import { AccessDenied } from "./features/auth/AccessDenied";
+
 function Layout() {
   const { isCollapsed } = useSidebar();
 
@@ -28,10 +34,20 @@ function Layout() {
 const router = createBrowserRouter(
   [
     {
+      path: "/pending",
+      element: <PendingApproval />,
+    },
+    {
+      path: "/access-denied",
+      element: <AccessDenied />,
+    },
+    {
       element: (
-        <SidebarProvider>
-          <Layout />
-        </SidebarProvider>
+        <ProtectedRoute>
+          <SidebarProvider>
+            <Layout />
+          </SidebarProvider>
+        </ProtectedRoute>
       ),
       children: [
         { index: true, element: <Navigate to="ndc-reporting/overview" replace /> },
@@ -49,7 +65,9 @@ const router = createBrowserRouter(
 export default function App() {
   return (
     <GlobalErrorBoundary>
-      <RouterProvider router={router} />
+      <AuthProvider>
+        <RouterProvider router={router} />
+      </AuthProvider>
     </GlobalErrorBoundary>
   );
 }

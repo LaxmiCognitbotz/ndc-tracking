@@ -57,20 +57,40 @@ def _days_delayed(last_working_date) -> int:
 
 # ── HTML template builder ─────────────────────────────────────────────────────
 
-def _build_html(records: list[dict]) -> str:
+def _build_html(records: list[dict], reminder_type: str = "ndc_delayed") -> str:
     """Build the full HTML email body for the delayed-cases reminder."""
 
     row_html = ""
     for rec in records:
         days = rec.get("days_delayed", 0)
+        if reminder_type == "fnf_open":
+            status_td = '<td><span style="color:#0b3d91;font-weight:600;">Open</span></td>'
+        elif reminder_type == "fnf_revision":
+            status_td = '<td><span class="delay">Revision Required</span></td>'
+        else:
+            status_td = f'<td><span class="delay">{days} Days</span></td>'
+
         row_html += f"""
         <tr>
           <td>{rec.get('person_number', '')}</td>
           <td>{rec.get('employee_name', '')}</td>
           <td>{rec.get('department', '—')}</td>
           <td>{_fmt_date(rec.get('last_working_date'))}</td>
-          <td><span class="delay">{days} Days</span></td>
+          {status_td}
         </tr>"""
+
+    if reminder_type == "fnf_open":
+        title = "F&F Open Cases – Top 10 Report"
+        intro = f"Please find below the list of the <b>Top {min(len(records), 10)} F&F open cases</b> identified as of today ({_fmt_date(date.today())})."
+        col_5 = "F&F Status"
+    elif reminder_type == "fnf_revision":
+        title = "F&F Revision Required Cases – Top 10 Report"
+        intro = f"Please find below the list of the <b>Top {min(len(records), 10)} F&F revision required cases</b> identified as of today ({_fmt_date(date.today())})."
+        col_5 = "F&F Status"
+    else:
+        title = "NDC Delayed Cases – Top 10 Report"
+        intro = f"Please find below the list of the <b>Top {min(len(records), 10)} delayed cases</b> identified as of today ({_fmt_date(date.today())})."
+        col_5 = "Days Delayed"
 
     html = f"""<!DOCTYPE html>
 <html>
@@ -94,14 +114,13 @@ td{{padding:14px;border-bottom:1px solid #ececec;}}
 <body>
 <div class="container">
   <div class="header">
-    <h2>NDC Delayed Cases – Top 10 Report</h2>
+    <h2>{title}</h2>
   </div>
   <div class="content">
     <p>Hello Team,</p>
     <p>
-      Please find below the list of the <b>Top {min(len(records), 10)} delayed cases</b>
-      identified as of today ({_fmt_date(date.today())}).
-      These records have exceeded the expected completion timeline and require attention for closure.
+      {intro}
+      These records require attention for closure.
     </p>
     <table>
       <tr>
@@ -109,12 +128,12 @@ td{{padding:14px;border-bottom:1px solid #ececec;}}
         <th>Name</th>
         <th>Department</th>
         <th>Pending Since</th>
-        <th>Days Delayed</th>
+        <th>{col_5}</th>
       </tr>
       {row_html}
     </table>
     <div class="note">
-      Please review the above delayed cases and take the required actions at the earliest
+      Please review the above cases and take the required actions at the earliest
       to avoid further aging and ensure timely closure.
     </div>
     <p>If any of these records have already been processed, kindly ignore this notification.</p>
@@ -133,13 +152,17 @@ td{{padding:14px;border-bottom:1px solid #ececec;}}
 
 # ── main send function ────────────────────────────────────────────────────────
 
-async def send_delayed_reminder(records: list[dict]) -> dict:
+async def send_delayed_reminder(
+    records: list[dict], recipient: str | None = None, reminder_type: str = "ndc_delayed"
+) -> dict:
     """
     Send the NDC delayed-cases reminder email with the top 10 delayed records.
 
     Args:
         records: Top-N delayed records (dicts with keys: person_number,
                  employee_name, department, last_working_date, days_delayed).
+        recipient: Optional custom recipient email.
+        reminder_type: Type of reminder ("ndc_delayed", "fnf_open", "fnf_revision").
 
     Returns:
         {"success": bool, "message": str}
@@ -149,7 +172,9 @@ async def send_delayed_reminder(records: list[dict]) -> dict:
     smtp_user = os.getenv("SMTP_USER") or os.getenv("SMTP_USERNAME", "")
     smtp_password = os.getenv("SMTP_PASSWORD", "")
     smtp_from = os.getenv("SMTP_FROM", smtp_user)
-    recipient = os.getenv("EMAIL_RECIPIENT", "")
+
+    if not recipient:
+        recipient = os.getenv("EMAIL_RECIPIENT", "")
 
     if not smtp_user:
         msg = "SMTP user not configured"
@@ -157,14 +182,21 @@ async def send_delayed_reminder(records: list[dict]) -> dict:
         return {"success": False, "message": msg}
 
     if not recipient:
-        msg = "EMAIL_RECIPIENT not configured"
+        msg = "Recipient email not configured or provided"
         logger.error(msg)
         return {"success": False, "message": msg}
 
-    html_body = _build_html(records)
+    html_body = _build_html(records, reminder_type=reminder_type)
+
+    if reminder_type == "fnf_open":
+        subj_title = "F&F Open Cases Reminder"
+    elif reminder_type == "fnf_revision":
+        subj_title = "F&F Revision Required Cases Reminder"
+    else:
+        subj_title = "NDC Delayed Cases Reminder"
 
     msg = MIMEMultipart("alternative")
-    msg["Subject"] = f"NDC Delayed Cases Reminder – Top {min(len(records), 10)} Records ({_fmt_date(date.today())})"
+    msg["Subject"] = f"{subj_title} – Top {min(len(records), 10)} Records ({_fmt_date(date.today())})"
     msg["From"] = smtp_from
     msg["To"] = recipient
     msg.attach(MIMEText(html_body, "html"))
@@ -179,10 +211,10 @@ async def send_delayed_reminder(records: list[dict]) -> dict:
                 server.login(smtp_user, smtp_password)
             server.sendmail(smtp_from, [recipient], msg.as_string())
 
-        logger.info("Delayed-cases reminder sent to %s (%d records)", recipient, len(records))
+        logger.info("%s sent to %s (%d records)", subj_title, recipient, len(records))
         return {
             "success": True,
-            "message": f"Reminder email sent to {recipient} with {len(records)} delayed records.",
+            "message": f"Reminder email sent to {recipient} with {len(records)} records.",
         }
     except Exception as e:
         logger.exception("Failed to send reminder email: %s", e)

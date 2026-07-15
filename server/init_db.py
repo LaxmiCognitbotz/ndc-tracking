@@ -8,6 +8,8 @@ from app.models.ndc_approval import NdcApproval
 from app.models.ndc_record import NdcRecord
 from app.models.rm_email_configuration import RmEmailConfiguration
 from app.models.upload_batch import UploadBatch
+from app.models.ndc_user_access import NdcUserAccess
+from app.models.ndc_auth_audit_log import NdcAuthAuditLog
 from config.database import engine
 
 

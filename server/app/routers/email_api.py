@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.email_recipient import EmailRecipient
 from app.models.ndc_record import NdcRecord
-from app.dto.email import EmailRecipientSchema, FnfEmailRequest
+from app.dto.email import EmailRecipientSchema, FnfEmailRequest, DelayedReminderRequest
 from app.services.email_service import _days_delayed, send_delayed_reminder, send_fnf_email_service
 from config.database import get_db
 
@@ -134,29 +134,61 @@ async def delete_email_recipient(id: int, db: AsyncSession = Depends(get_db)):
 
 @router.post("/send-delayed-reminder")
 async def send_delayed_reminder_email(
+    payload: DelayedReminderRequest,
     db: AsyncSession = Depends(get_db),
 ):
-    """Send a reminder email for the top 10 delayed NDC cases."""
+    """Send a reminder email for the top 10 delayed/overdue cases (NDC or F&F)."""
     try:
         today = date.today()
 
-        # Fetch all overdue non-completed records
-        result = await db.execute(
-            select(NdcRecord).where(
-                NdcRecord.ndc_stage != "NDC Completed",
-                NdcRecord.last_working_date < today,
-                NdcRecord.last_working_date.isnot(None),
+        # Fetch records based on type
+        if payload.type == "fnf_open":
+            # NDC Completed, but F&F is not completed and not revision
+            result = await db.execute(
+                select(NdcRecord).where(
+                    NdcRecord.ndc_stage == "NDC Completed",
+                    NdcRecord.is_fnf_completed == False,
+                    NdcRecord.is_fnf_revision == False,
+                )
             )
-        )
-        all_delayed = result.scalars().all()
+            records = result.scalars().all()
+            sorted_records = sorted(
+                records,
+                key=lambda r: r.last_working_date or date.min,
+                reverse=True,
+            )
+        elif payload.type == "fnf_revision":
+            # NDC Completed, but F&F needs revision
+            result = await db.execute(
+                select(NdcRecord).where(
+                    NdcRecord.ndc_stage == "NDC Completed",
+                    NdcRecord.is_fnf_revision == True,
+                )
+            )
+            records = result.scalars().all()
+            sorted_records = sorted(
+                records,
+                key=lambda r: r.last_working_date or date.min,
+                reverse=True,
+            )
+        else:
+            # Default: ndc_delayed
+            # Fetch all overdue non-completed records
+            result = await db.execute(
+                select(NdcRecord).where(
+                    NdcRecord.ndc_stage != "NDC Completed",
+                    NdcRecord.last_working_date < today,
+                    NdcRecord.last_working_date.isnot(None),
+                )
+            )
+            records = result.scalars().all()
+            sorted_records = sorted(
+                records,
+                key=lambda r: _days_delayed(r.last_working_date),
+                reverse=True,
+            )
 
-        # Sort by days delayed desc, take top 10
-        sorted_delayed = sorted(
-            all_delayed,
-            key=lambda r: _days_delayed(r.last_working_date),
-            reverse=True,
-        )
-        top10 = sorted_delayed[:10]
+        top10 = sorted_records[:10]
 
         records_payload = [
             {
@@ -171,6 +203,8 @@ async def send_delayed_reminder_email(
 
         outcome = await send_delayed_reminder(
             records=records_payload,
+            recipient=payload.email,
+            reminder_type=payload.type or "ndc_delayed",
         )
 
         if not outcome["success"]:

@@ -327,14 +327,20 @@ Manages recipient configuration and manual triggers for email notifications.
 * **Error Response (404 Not Found)**: Returned if recipient is not found.
 
 #### `POST /api/v1/send-delayed-reminder`
-* **Description**: Compiles the top 10 delayed/overdue cases that are non-completed and sends a reminder summary email to the system administrator.
+* **Description**: Compiles the top 10 delayed/overdue cases that are non-completed and sends a reminder summary email to the custom recipient email address.
+* **Request Body**: `DelayedReminderRequest`
+```json
+{
+  "email": "admin@company.com"
+}
+```
 * **Success Response (200 OK)**:
 ```json
 {
   "status": true,
   "data": {
     "status": "success",
-    "message": "Reminder email sent successfully.",
+    "message": "Reminder email sent to admin@company.com with 10 delayed records.",
     "records_sent": 10
   },
   "message": null
