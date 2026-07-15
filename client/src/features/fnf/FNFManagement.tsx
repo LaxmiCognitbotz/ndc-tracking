@@ -213,6 +213,21 @@ export function FNFManagement() {
     );
   };
 
+  const getNDCStatusBadge = (record: NDCRecord) => {
+    const stage = record.ndcStage || "Recovery Pending";
+    const displayLabel = stage === "NDC Completed" ? "Completed" : stage;
+    const colorMap: Record<string, string> = {
+      "NDC Completed": "bg-green-50 text-green-700 border-green-200",
+      "GCC Pending": "bg-orange-50 text-orange-700 border-orange-200",
+      "Recovery Pending": "bg-blue-50 text-blue-700 border-blue-200",
+    };
+    return (
+      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-[4px] text-xs font-medium border ${colorMap[stage] || "bg-gray-50 text-gray-700 border-gray-200"}`}>
+        {displayLabel}
+      </span>
+    );
+  };
+
   const kpiCards = [
     { type: "total" as const, label: "Total F&F In Process", value: fnfStats.total, icon: FileText, color: "text-primary" },
     { type: "done" as const, label: "F&F Completed", value: fnfStats.done, icon: CheckCircle, color: "text-green-600" },
@@ -313,7 +328,7 @@ export function FNFManagement() {
                 "Department": r.department,
                 "Last working date": r.lastWorkingDate,
                 "F&F status": getFNFStatusLabel(r),
-                "Doc count": r.fnfDocumentCount,
+                "NDC status": r.ndcStage === "NDC Completed" ? "Completed" : (r.ndcStage || "Recovery Pending"),
                 "F&F completed date": r.fnfCompletedDate,
               }));
               exportToExcel(mappedData, "FNF_Records");
@@ -334,6 +349,7 @@ export function FNFManagement() {
                 <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Department</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Last working date</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">F&amp;F status</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">NDC status</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Actions</th>
               </tr>
             </thead>
@@ -345,6 +361,7 @@ export function FNFManagement() {
                   <td className="px-4 py-3 text-sm">{record.department}</td>
                   <td className="px-4 py-3 text-sm">{record.lastWorkingDate}</td>
                   <td className="px-4 py-3 text-sm">{getFNFStatusBadge(record)}</td>
+                  <td className="px-4 py-3 text-sm">{getNDCStatusBadge(record)}</td>
                   <td className="px-4 py-3 text-sm">
                     <div className="flex gap-2 items-center">
                       <button
