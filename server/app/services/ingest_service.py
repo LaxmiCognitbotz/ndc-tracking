@@ -134,6 +134,11 @@ async def ingest_excel_file(
                 "batch_id": batch_id,
             }
 
+            # Only ingest records where NDC Assigned date is >= 09/02/2026
+            cutoff_date = date(2026, 2, 9)
+            if record_data["ndc_assigned_date"] and record_data["ndc_assigned_date"] < cutoff_date:
+                continue
+
             if record:
                 # Preserve F&F fields that are manually set — don't overwrite them
                 preserved_fields = {

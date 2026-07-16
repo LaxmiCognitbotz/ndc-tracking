@@ -1,11 +1,15 @@
 from datetime import date
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status, UploadFile, File
+import os
+from pathlib import Path
+from tempfile import NamedTemporaryFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.dto.common import CommonNDCRecord, FnfUpdateRequest
 from app.services.common_service import fetch_common_records, update_fnf_status
+from app.services.ingest_service import ingest_excel_file
 from config.database import get_db
 
 router = APIRouter(prefix="/api/v1", tags=["Exit Clearance & Settlement Operations"])
@@ -73,3 +77,49 @@ async def update_fnf_status_route(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"An error occurred: {str(e)}",
         )
+
+
+@router.post("/ndc-records/upload")
+async def upload_ndc_records(
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db)
+):
+    """Manually upload an Excel file for ingestion."""
+    if not file.filename.endswith((".xlsx", ".xlsb", ".xls")):
+        raise HTTPException(status_code=400, detail="Invalid file type. Only Excel files are supported.")
+        
+    temp_path = None
+    try:
+        # Create a temporary file to hold the uploaded content
+        with NamedTemporaryFile(delete=False, suffix=Path(file.filename).suffix) as tmp:
+            content = await file.read()
+            tmp.write(content)
+            temp_path = tmp.name
+
+        # Process the file
+        result = await ingest_excel_file(
+            file_path=temp_path,
+            file_name=file.filename,
+            uploaded_by="manual_api_upload",
+            db=db,
+            source_type="manual"
+        )
+        
+        if result["status"] == "failed":
+            raise HTTPException(status_code=400, detail={"message": "Ingestion failed", "errors": result["errors"]})
+            
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An error occurred: {str(e)}",
+        )
+    finally:
+        # Clean up the temp file
+        if temp_path and os.path.exists(temp_path):
+            try:
+                os.remove(temp_path)
+            except Exception:
+                pass

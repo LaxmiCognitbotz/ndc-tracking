@@ -8,13 +8,12 @@ def excel_serial_to_date(serial) -> date | None:
         
     if isinstance(serial, str):
         serial = serial.strip()
-        if "-" in serial:
-            try:
-                # Handle DD-MM-YYYY from Oracle exports
-                return datetime.strptime(serial, "%d-%m-%Y").date()
-            except ValueError:
-                pass
-                
+        if "-" in serial or "/" in serial:
+            for fmt in ("%d-%m-%Y", "%d/%m/%Y", "%d/%m/%y"):
+                try:
+                    return datetime.strptime(serial, fmt).date()
+                except ValueError:
+                    pass
     try:
         serial = float(serial)
     except (ValueError, TypeError):
