@@ -33,10 +33,12 @@ export function ResetPassword() {
 
     const verifyToken = async () => {
       try {
-        const res = await api.get<{ valid: boolean; email: string }>(`api/auth/verify-reset-token/${token}`);
-        if (res.data?.valid) {
+        const res = await api.get<any>(`api/auth/verify-reset-token/${token}`);
+        // API wraps response in { status, data, message } envelope
+        const responseData = res.data?.data || res.data;
+        if (responseData?.valid) {
           setTokenValid(true);
-          setUserEmail(res.data.email || "");
+          setUserEmail(responseData.email || "");
         } else {
           setTokenValid(false);
           setTokenError("Password reset link is invalid or expired.");

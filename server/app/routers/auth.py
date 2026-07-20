@@ -191,14 +191,12 @@ async def login_post(payload: LoginRequest, db: AsyncSession = Depends(get_db)):
     }
 
 
+RESET_PASSWORD_EXPIRE_MINUTES = int(os.getenv("RESET_PASSWORD_EXPIRE_MINUTES", "15"))
+
+
 @router.post("/forgot-password")
 async def forgot_password(payload: ForgotPasswordRequest, request: Request, db: AsyncSession = Depends(get_db)):
     email = payload.email.strip().lower()
-    # if not email.endswith("@adani.com"):
-    #     raise HTTPException(
-    #         status_code=status.HTTP_400_BAD_REQUEST,
-    #         detail="Only @adani.com email addresses are allowed."
-    #     )
 
     stmt = select(NdcUserAccess).where(NdcUserAccess.email == email)
     res = await db.execute(stmt)
@@ -215,12 +213,13 @@ async def forgot_password(payload: ForgotPasswordRequest, request: Request, db: 
             detail="Account is not approved for access."
         )
 
-    # Generate token valid for 30 minutes
+    # Generate token valid for configurable minutes (default: 1440 minutes / 24 hours)
     reset_token = secrets.token_urlsafe(32)
     user_access.reset_token = reset_token
-    user_access.reset_token_expires_at = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(minutes=30)
+    user_access.reset_token_expires_at = datetime.now() + timedelta(minutes=RESET_PASSWORD_EXPIRE_MINUTES)
     db.add(user_access)
     await db.commit()
+    logger.info("Generated reset token for %s expiring at %s", email, user_access.reset_token_expires_at)
 
     # Build reset link
     origin = request.headers.get("origin") or "http://localhost:5173"
@@ -237,15 +236,24 @@ async def forgot_password(payload: ForgotPasswordRequest, request: Request, db: 
 
 @router.get("/verify-reset-token/{token}")
 async def verify_reset_token(token: str, db: AsyncSession = Depends(get_db)):
+    logger.info("Verifying reset token: %s", token)
     stmt = select(NdcUserAccess).where(NdcUserAccess.reset_token == token)
     res = await db.execute(stmt)
     user_access = res.scalar_one_or_none()
 
     if not user_access:
+        logger.warning("Reset token %s not found in database", token)
         raise HTTPException(status_code=400, detail="Invalid or expired password reset link.")
 
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
-    if not user_access.reset_token_expires_at or user_access.reset_token_expires_at < now:
+    now = datetime.now()
+    expires_at = user_access.reset_token_expires_at
+    if expires_at and expires_at.tzinfo is not None:
+        expires_at = expires_at.replace(tzinfo=None)
+
+    logger.info("Reset token %s for %s: expires_at=%s, now=%s", token, user_access.email, expires_at, now)
+
+    if not expires_at or expires_at < now:
+        logger.warning("Reset token %s for %s has expired (expires_at=%s, now=%s)", token, user_access.email, expires_at, now)
         raise HTTPException(status_code=400, detail="This password reset link has expired. Please request a new one.")
 
     return {"valid": True, "email": user_access.email}
@@ -258,10 +266,16 @@ async def reset_password(payload: ResetPasswordRequest, db: AsyncSession = Depen
     user_access = res.scalar_one_or_none()
 
     if not user_access:
+        logger.warning("Reset token %s not found during reset", payload.token)
         raise HTTPException(status_code=400, detail="Invalid or expired password reset link.")
 
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
-    if not user_access.reset_token_expires_at or user_access.reset_token_expires_at < now:
+    now = datetime.now()
+    expires_at = user_access.reset_token_expires_at
+    if expires_at and expires_at.tzinfo is not None:
+        expires_at = expires_at.replace(tzinfo=None)
+
+    if not expires_at or expires_at < now:
+        logger.warning("Reset token %s expired during reset", payload.token)
         raise HTTPException(status_code=400, detail="This password reset link has expired. Please request a new one.")
 
     if not payload.new_password or len(payload.new_password.strip()) < 4:
@@ -273,6 +287,7 @@ async def reset_password(payload: ResetPasswordRequest, db: AsyncSession = Depen
 
     db.add(user_access)
     await db.commit()
+    logger.info("Successfully reset password for %s", user_access.email)
 
     return {"message": "Password reset successfully. You can now log in with your new password."}
 
