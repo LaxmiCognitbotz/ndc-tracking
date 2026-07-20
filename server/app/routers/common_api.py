@@ -64,7 +64,7 @@ async def update_fnf_status_route(
     body: FnfUpdateRequest,
     db: AsyncSession = Depends(get_db),
 ):
-    """Update F&F status for a record. Triggers department date propagation on completion."""
+    """Update F&F status for a record.Triggers department date propagation on completion."""
     try:
         record = await update_fnf_status(record_id, body, db)
         if not record:
