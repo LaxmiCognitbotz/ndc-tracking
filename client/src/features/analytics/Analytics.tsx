@@ -43,7 +43,7 @@ const DEPT_STATUS_FIELDS: Record<string, keyof NDCRecord> = {
 const APPROVAL_DEPT_OPTIONS = Object.keys(DEPT_STATUS_FIELDS).sort((a, b) => a.localeCompare(b));
 
 const getFnfCompletionDays = (record: NDCRecord) => {
-  let completedDateStr = record.ndcCompletedDate;
+  let completedDateStr = record.fnfCompletedDate || record.ndcCompletedDate;
   if (!completedDateStr) {
     const approvalDates = Object.keys(record)
       .filter((k) => k.endsWith("ApprovalDate") && (record as any)[k])
@@ -76,6 +76,14 @@ const getNdcCompletionDays = (record: NDCRecord) => {
   const completed = new Date(completedDateStr);
   const initiated = new Date(record.ndcInitiatedDate);
   return Math.max(0, Math.ceil((completed.getTime() - initiated.getTime()) / (1000 * 60 * 60 * 24)));
+};
+
+const getFnfRevisionDays = (record: NDCRecord) => {
+  if (!record.fnfRevisionStartDate) return null;
+  const completedDateStr = record.fnfRevisionCompletedDate || new Date().toISOString().split('T')[0];
+  const completed = new Date(completedDateStr);
+  const start = new Date(record.fnfRevisionStartDate);
+  return Math.max(0, Math.ceil((completed.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)));
 };
 
 export function Analytics() {
@@ -200,19 +208,20 @@ export function Analytics() {
 
     const activeRecords = mockNDCData.filter(
       (r) =>
-        r.fnfStatus &&
-        (r.fnfStatus === "Closed" ||
-          r.fnfStatus === "Done" ||
-          r.fnfStatus === "Completed")
+        r.isFnfCompleted ||
+        r.isFnfClosed ||
+        (r.fnfStatus &&
+          (r.fnfStatus === "Closed" ||
+            r.fnfStatus === "Done" ||
+            r.fnfStatus === "Completed"))
     );
     activeRecords.forEach((record) => {
       const days = getFnfCompletionDays(record);
       if (days !== null) {
-        const abs = Math.abs(days);
-        if (abs === 0) cats["On or due date"]++;
-        else if (abs <= 2) cats["Within 2 days"]++;
-        else if (abs <= 7) cats["3–7 days"]++;
-        else if (abs <= 30) cats["7–30 days"]++;
+        if (days <= 0) cats["On or due date"]++;
+        else if (days <= 2) cats["Within 2 days"]++;
+        else if (days <= 7) cats["3–7 days"]++;
+        else if (days <= 30) cats["7–30 days"]++;
         else cats["More than 30 days"]++;
       }
     });
@@ -250,7 +259,7 @@ export function Analytics() {
       const days = getNdcCompletionDays(record);
       if (days === null) return;
 
-      if (days === 0) cats["On or due date"]++;
+      if (days <= 0) cats["On or due date"]++;
       else if (days <= 2) cats["Within 2 days"]++;
       else if (days <= 7) cats["3–7 days"]++;
       else if (days <= 30) cats["7–30 days"]++;
@@ -285,22 +294,53 @@ export function Analytics() {
 
     const activeRecords = mockNDCData.filter(
       (r) =>
-        r.fnfStatus &&
-        (r.fnfStatus === "Closed" ||
-          r.fnfStatus === "Done" ||
-          r.fnfStatus === "Completed")
+        r.isFnfCompleted ||
+        r.isFnfClosed ||
+        (r.fnfStatus &&
+          (r.fnfStatus === "Closed" ||
+            r.fnfStatus === "Done" ||
+            r.fnfStatus === "Completed"))
     );
     activeRecords.forEach((record) => {
       const days = getFnfCompletionDays(record);
       if (days === null) return;
-      const absDays = Math.abs(days);
-      if (absDays <= 7) cats["Within 7 Days"].count++;
-      else if (absDays <= 15) cats["Within 15 Days"].count++;
-      else if (absDays <= 30) cats["Within 30 Days"].count++;
+      if (days <= 7) cats["Within 7 Days"].count++;
+      else if (days <= 15) cats["Within 15 Days"].count++;
+      else if (days <= 30) cats["Within 30 Days"].count++;
       else cats["More than 30 Days"].count++;
     });
 
     return Object.entries(cats).map(([name, { count, color }]) => ({ name, count, color }));
+  }, [mockNDCData]);
+
+  // F&F Revision TAT Analysis
+  const fnfRevisionTATData = useMemo(() => {
+    const cats: Record<string, { count: number; color: string }> = {
+      "On or due date": { count: 0, color: "#10b981" },
+      "Within 2 days": { count: 0, color: "#84cc16" },
+      "3–7 days": { count: 0, color: "#f59e0b" },
+      "7–30 days": { count: 0, color: "#f97316" },
+      "More than 30 day": { count: 0, color: "#ef4444" },
+    };
+
+    mockNDCData.forEach((record) => {
+      const days = getFnfRevisionDays(record);
+      if (days === null) return;
+      if (days <= 0) cats["On or due date"].count++;
+      else if (days <= 2) cats["Within 2 days"].count++;
+      else if (days <= 7) cats["3–7 days"].count++;
+      else if (days <= 30) cats["7–30 days"].count++;
+      else cats["More than 30 day"].count++;
+    });
+
+    const total = Object.values(cats).reduce((sum, item) => sum + item.count, 0);
+    return Object.entries(cats).map(([name, { count, color }]) => ({
+      name,
+      count,
+      pct: total > 0 ? Math.round((count / total) * 100) : 0,
+      color,
+      fill: color,
+    }));
   }, [mockNDCData]);
 
   // NDC Closed TAT Analysis (previously named fnfClosedTATData)
@@ -504,7 +544,7 @@ export function Analytics() {
   const analyticsSections = [
     { id: "section-ndc-overview", title: "NDC Status Overview" },
     { id: "section-fnf-overview", title: "F&F Status Overview" },
-    { id: "section-bottleneck", title: "Approval NDC Analysis" },
+    { id: "section-bottleneck-combined", title: "NDC Approval Status & F&F Revision TAT Analysis" },
     { id: "section-monthly", title: "Monthly Trend NDC Clearance" },
     { id: "section-fnf-tat", title: "F&F Closed TAT Analysis" },
     { id: "section-ndc-tat", title: "NDC Closed TAT Analysis" },
@@ -668,83 +708,128 @@ export function Analytics() {
         </div>
       </div>
 
-      {/* Approval NDC Analysis — Horizontal Bar Chart */}
-      <div className="bg-card rounded-[4px] p-6 border border-border" id="section-bottleneck">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-bold">Approval NDC Analysis</h3>
-          <div className="flex items-center gap-2">
-            <label className="text-sm font-medium text-foreground">Approval:</label>
-            <select
-              value={bottleneckApprovalFilter}
-              onChange={(e) => setBottleneckApprovalFilter(e.target.value)}
-              className="px-3 py-1.5 border border-border rounded-[4px] bg-input-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+      {/* Approval NDC Analysis & F&F Revision TAT Analysis side-by-side */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6" id="section-bottleneck-combined">
+        {/* NDC Approval Status by Department — Horizontal Stacked Bar Chart with Outside Labels */}
+        <div className="bg-card rounded-[4px] p-6 border border-border" id="section-bottleneck">
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 mb-4">
+            <h3 className="text-lg font-bold whitespace-nowrap">NDC Approval Status by Department</h3>
+            <div className="flex items-center gap-2 ml-auto">
+              <label className="text-sm font-medium text-foreground">Approval:</label>
+              <select
+                value={bottleneckApprovalFilter}
+                onChange={(e) => setBottleneckApprovalFilter(e.target.value)}
+                className="px-3 py-1.5 border border-border rounded-[4px] bg-input-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                <option value="">All approvals</option>
+                {APPROVAL_DEPT_OPTIONS.map((d) => <option key={d} value={d}>{d}</option>)}
+              </select>
+            </div>
+          </div>
+          <ResponsiveContainer width="100%" height={420}>
+            <BarChart
+              data={approvalBottleneckData}
+              margin={{ top: 25, right: 10, left: -15, bottom: 40 }}
             >
-              <option value="">All approvals</option>
-              {APPROVAL_DEPT_OPTIONS.map((d) => <option key={d} value={d}>{d}</option>)}
-            </select>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+              <XAxis
+                dataKey="name"
+                stroke="#64748b"
+                tick={{ fontSize: 10 }}
+                interval={0}
+                angle={-35}
+                textAnchor="end"
+                height={70}
+                label={{ value: "Approval Department", position: "insideBottom", offset: -5, style: { fontSize: 11, fill: "#64748b" } }}
+              />
+              <YAxis
+                stroke="#64748b"
+                allowDecimals={false}
+                tick={{ fontSize: 10 }}
+                domain={[0, "dataMax + 40"]}
+              />
+              <Tooltip formatter={(val: number) => [val, "Cases"]} />
+              <Legend verticalAlign="top" height={36} />
+              <Bar dataKey="completed" fill="#10b981" name="Completed" radius={[4, 4, 0, 0]} maxBarSize={24} isAnimationActive={true} animationDuration={800}>
+                <LabelList 
+                  position="top" 
+                  offset={6} 
+                  style={{ fill: "#374151", fontSize: 10, fontWeight: "bold" }} 
+                  valueAccessor={(entry: any) => {
+                    const payload = entry?.payload ?? entry;
+                    const val = payload.completed ?? 0;
+                    const pct = payload.completedPct ?? 0;
+                    return val > 0 ? `${val} (${pct}%)` : "";
+                  }}
+                />
+              </Bar>
+              <Bar dataKey="pending" fill="#ef4444" name="Pending" radius={[4, 4, 0, 0]} maxBarSize={24} isAnimationActive={true} animationDuration={800} animationBegin={200}>
+                <LabelList 
+                  position="top" 
+                  offset={6} 
+                  style={{ fill: "#374151", fontSize: 10, fontWeight: "bold" }} 
+                  valueAccessor={(entry: any) => {
+                    const payload = entry?.payload ?? entry;
+                    const val = payload.pending ?? 0;
+                    const pct = payload.pendingPct ?? 0;
+                    return val > 0 ? `${val} (${pct}%)` : "";
+                  }}
+                />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* F&F Revision TAT Analysis */}
+        <div className="bg-card rounded-[4px] p-6 border border-border" id="section-fnf-revision-tat">
+          <div className="mb-4">
+            <h3 className="text-lg font-bold">F&amp;F Revision TAT Analysis</h3>
+            {/* <p className="text-xs text-muted-foreground mt-1">
+              Tracks Turnaround Time (TAT) from when a record is marked as <strong>Revision Required</strong> until it is marked as <strong>Completed/Closed</strong>. For active/open revisions, the TAT is calculated up to today.
+            </p> */}
+          </div>
+          <ResponsiveContainer width="100%" height={420}>
+            <BarChart data={fnfRevisionTATData} margin={{ top: 28, right: 20, left: 5, bottom: 60 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+              <XAxis
+                dataKey="name"
+                stroke="#64748b"
+                tick={{ fontSize: 11 }}
+                interval={0}
+                angle={-35}
+                textAnchor="end"
+                height={70}
+                label={{ value: "TAT Category", position: "insideBottom", offset: -5, style: { fontSize: 12, fill: "#64748b" } }}
+              />
+              <YAxis
+                stroke="#64748b"
+                allowDecimals={false}
+                label={{ value: "Number of Employees", angle: -90, position: "insideLeft", offset: 15, style: { fontSize: 12, fill: "#64748b", textAnchor: "middle" } }}
+              />
+              <Tooltip formatter={(val: number) => [val, "Count"]} />
+              <Bar dataKey="count" radius={[4, 4, 0, 0]} maxBarSize={55} minPointSize={4} isAnimationActive={true} animationDuration={900}>
+                {fnfRevisionTATData.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
+                <LabelList content={makeCustomBarLabel(fnfRevisionTATData)} dataKey="count" />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+          <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 pt-2">
+            {[
+              { label: "On or due date", color: "#10b981" },
+              { label: "Within 2 days", color: "#84cc16" },
+              { label: "3–7 days", color: "#f59e0b" },
+              { label: "7–30 days", color: "#f97316" },
+              { label: "More than 30 day", color: "#ef4444" },
+            ].map((item) => (
+              <span key={item.label} className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <span className="inline-block w-3 h-3 rounded-full" style={{ backgroundColor: item.color }} />
+                {item.label}
+              </span>
+            ))}
           </div>
         </div>
-        <ResponsiveContainer width="100%" height={500}>
-          <BarChart
-            layout="vertical"
-            data={approvalBottleneckData}
-            margin={{ top: 10, right: 60, left: 100, bottom: 30 }}
-          >
-            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" horizontal={false} />
-            <XAxis
-              type="number"
-              stroke="#64748b"
-              tick={{ fontSize: 12 }}
-              domain={[0, 100]}
-              tickFormatter={(v) => `${v}%`}
-              label={{ value: "Total Employee", position: "insideBottom", offset: -15, style: { fontSize: 12, fill: "#64748b" } }}
-            />
-            <YAxis
-              type="category"
-              dataKey="name"
-              stroke="#64748b"
-              tick={{ fontSize: 12 }}
-              width={90}
-              label={{ value: "Approval Department", angle: -90, position: "insideLeft", offset: -80, style: { fontSize: 12, fill: "#64748b", textAnchor: "middle" } }}
-            />
-            <Tooltip
-              formatter={(value: any, name: any, props: any) => {
-                const item = props.payload;
-                if (name === "Completed") {
-                  return [`${item.completed} cases (${value}%)`, name];
-                }
-                if (name === "Pending") {
-                  return [`${item.pending} cases (${value}%)`, name];
-                }
-                return [`${value}%`, name];
-              }}
-            />
-            <Legend verticalAlign="top" />
-            <Bar dataKey="completedPct" stackId="a" fill="#10b981" name="Completed" maxBarSize={40} isAnimationActive={true} animationDuration={800}>
-              <LabelList 
-                valueAccessor={(entry: any) => {
-                  const pct = entry?.payload?.completedPct ?? entry?.completedPct ?? 0;
-                  const count = entry?.payload?.completed ?? entry?.completed ?? 0;
-                  return pct > 5 ? `${count} (${pct}%)` : "";
-                }}
-                position="insideRight" 
-                style={{ fill: "white", fontSize: 12, fontWeight: "bold" }} 
-              />
-            </Bar>
-            <Bar dataKey="pendingPct" stackId="a" fill="#ef4444" name="Pending" radius={[0, 4, 4, 0]} maxBarSize={40} isAnimationActive={true} animationDuration={800} animationBegin={200}>
-              <LabelList 
-                valueAccessor={(entry: any) => {
-                  const pct = entry?.payload?.pendingPct ?? entry?.pendingPct ?? 0;
-                  const count = entry?.payload?.pending ?? entry?.pending ?? 0;
-                  return pct > 5 ? `${count} (${pct}%)` : "";
-                }}
-                position="insideRight" 
-                style={{ fill: "white", fontSize: 12, fontWeight: "bold" }} 
-              />
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
       </div>
+
 
       {/* Monthly Trend */}
       <div className="bg-card rounded-[4px] p-6 border border-border" id="section-monthly">
@@ -867,6 +952,8 @@ export function Analytics() {
           ))}
         </div>
       </div>
+
+
 
       {/* Top Delayed Cases Charts (Original F&F, Revision F&F) */}
       <div className="bg-card rounded-[4px] p-6 border border-border" id="section-delayed">
