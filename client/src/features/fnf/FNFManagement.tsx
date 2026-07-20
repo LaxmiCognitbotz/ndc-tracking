@@ -37,6 +37,10 @@ export function FNFManagement() {
   const [mailEmailTo, setMailEmailTo] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [kpiCurrentPage, setKpiCurrentPage] = useState(1);
+  const [reminderMailDialogOpen, setReminderMailDialogOpen] = useState(false);
+  const [reminderMailEmailTo, setReminderMailEmailTo] = useState("");
+  const [reminderMailType, setReminderMailType] = useState<string>("fnf_open");
+  const [sendingReminder, setSendingReminder] = useState(false);
 
   // Reset to first page on filter change
   useEffect(() => {
@@ -320,24 +324,42 @@ export function FNFManagement() {
       <div id="section-fnf-table" className="bg-card rounded-[4px] border border-border overflow-hidden">
         <div className="p-6 border-b border-border flex items-center justify-between">
           <h2 className="text-xl font-bold">F&amp;F Records Table</h2>
-          <button
-            onClick={() => {
-              const mappedData = filteredData.map(r => ({
-                "Person number": r.personNumber,
-                "Employee name": r.employeeName,
-                "Department": r.department,
-                "Last working date": r.lastWorkingDate,
-                "F&F status": getFNFStatusLabel(r),
-                "NDC status": r.ndcStage === "NDC Completed" ? "Completed" : (r.ndcStage || "Recovery Pending"),
-                "F&F completed date": r.fnfCompletedDate,
-              }));
-              exportToExcel(mappedData, "FNF_Records");
-            }}
-            className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-[4px] hover:bg-primary/90 transition-colors"
-          >
-            <Download className="w-4 h-4" />
-            Export to Excel
-          </button>
+          <div className="flex items-center gap-3">
+            {(statusFilter === "Open" || statusFilter === "Revision Required") && (
+              <button
+                disabled={filteredData.length === 0}
+                onClick={() => {
+                  const type = statusFilter === "Open" ? "fnf_open" : "fnf_revision";
+                  setReminderMailType(type);
+                  setReminderMailEmailTo("");
+                  setReminderMailDialogOpen(true);
+                }}
+                className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground text-sm rounded-[4px] hover:bg-primary/90 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                <Mail className="w-4 h-4" />
+                Send Reminder
+              </button>
+            )}
+            <button
+              disabled={filteredData.length === 0}
+              onClick={() => {
+                const mappedData = filteredData.map(r => ({
+                  "Person number": r.personNumber,
+                  "Employee name": r.employeeName,
+                  "Department": r.department,
+                  "Last working date": r.lastWorkingDate,
+                  "F&F status": getFNFStatusLabel(r),
+                  "NDC status": r.ndcStage === "NDC Completed" ? "Completed" : (r.ndcStage || "Recovery Pending"),
+                  "F&F completed date": r.fnfCompletedDate,
+                }));
+                exportToExcel(mappedData, "FNF_Records");
+              }}
+              className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground text-sm rounded-[4px] hover:bg-primary/90 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              <Download className="w-4 h-4" />
+              Export to Excel
+            </button>
+          </div>
         </div>
 
         <div className="overflow-x-auto">
@@ -359,7 +381,7 @@ export function FNFManagement() {
                   <td className="px-4 py-3 text-sm font-medium">{record.personNumber}</td>
                   <td className="px-4 py-3 text-sm">{record.employeeName}</td>
                   <td className="px-4 py-3 text-sm">{record.department}</td>
-                  <td className="px-4 py-3 text-sm">{record.lastWorkingDate}</td>
+                  <td className="px-4 py-3 text-sm whitespace-nowrap">{record.lastWorkingDate}</td>
                   <td className="px-4 py-3 text-sm">{getFNFStatusBadge(record)}</td>
                   <td className="px-4 py-3 text-sm">{getNDCStatusBadge(record)}</td>
                   <td className="px-4 py-3 text-sm">
@@ -433,23 +455,41 @@ export function FNFManagement() {
         onClose={() => setKpiModalOpen(false)}
         title={kpiModalData.title}
         headerActions={
-          <button
-            onClick={() => {
-              const mappedData = kpiModalData.data.map(r => ({
-                "Person number": r.personNumber,
-                "Name": r.employeeName,
-                "Department": r.department,
-                "Last working date": r.lastWorkingDate,
-                "NDC stage": r.ndcStage,
-                "F&F status": getFNFStatusLabel(r)
-              }));
-              exportToExcel(mappedData, kpiModalData.title || "KPI_Records");
-            }}
-            className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-[4px] hover:bg-primary/90 transition-colors"
-          >
-            <Download className="w-4 h-4" />
-            Export to Excel
-          </button>
+          <div className="flex items-center gap-3">
+            {(kpiModalData.title === "F&F Open" || kpiModalData.title === "Revision Required") && (
+              <button
+                disabled={kpiModalData.data.length === 0}
+                onClick={() => {
+                  const type = kpiModalData.title === "F&F Open" ? "fnf_open" : "fnf_revision";
+                  setReminderMailType(type);
+                  setReminderMailEmailTo("");
+                  setReminderMailDialogOpen(true);
+                }}
+                className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground text-sm rounded-[4px] hover:bg-primary/90 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                <Mail className="w-4 h-4" />
+                Send Reminder
+              </button>
+            )}
+            <button
+              disabled={kpiModalData.data.length === 0}
+              onClick={() => {
+                const mappedData = kpiModalData.data.map(r => ({
+                  "Person number": r.personNumber,
+                  "Name": r.employeeName,
+                  "Department": r.department,
+                  "Last working date": r.lastWorkingDate,
+                  "NDC stage": r.ndcStage,
+                  "F&F status": getFNFStatusLabel(r)
+                }));
+                exportToExcel(mappedData, kpiModalData.title || "KPI_Records");
+              }}
+              className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground text-sm rounded-[4px] hover:bg-primary/90 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              <Download className="w-4 h-4" />
+              Export to Excel
+            </button>
+          </div>
         }
       >
         <div className="flex flex-col flex-1 overflow-hidden p-4">
@@ -624,6 +664,72 @@ export function FNFManagement() {
               </button>
               <button
                 onClick={() => { setMailDialogOpen(false); setMailRecord(null); setMailEmailTo(""); }}
+                className="px-4 py-2 bg-muted text-foreground rounded-[4px] hover:bg-muted/80 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reminder Mail Dialog */}
+      <Dialog open={reminderMailDialogOpen} onOpenChange={setReminderMailDialogOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Send Reminder Email</DialogTitle>
+          </DialogHeader>
+          <div className="p-4 space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2">
+                Email ID <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="email"
+                value={reminderMailEmailTo}
+                onChange={(e) => setReminderMailEmailTo(e.target.value)}
+                placeholder="Enter email address"
+                className="w-full px-3 py-2 border border-border rounded-[4px] bg-input-background focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
+            <div className="flex gap-3">
+              <button
+                disabled={sendingReminder}
+                onClick={async () => {
+                  if (!reminderMailEmailTo) {
+                    toast.error("Please enter an email address");
+                    return;
+                  }
+                  setSendingReminder(true);
+                  const toastId = toast.loading(`Sending reminder email to ${reminderMailEmailTo}...`);
+                  try {
+                    const res = await axios.post("/api/v1/send-delayed-reminder", {
+                      email: reminderMailEmailTo,
+                      type: reminderMailType,
+                    });
+                    const data = res.data?.data || res.data;
+                    toast.dismiss(toastId);
+                    toast.success(data?.message || "Reminder email sent successfully!");
+                    setReminderMailDialogOpen(false);
+                    setReminderMailEmailTo("");
+                  } catch (err: any) {
+                    toast.dismiss(toastId);
+                    const detail = err?.response?.data?.detail || err?.message || "Failed to send email";
+                    toast.error(`Email failed: ${detail}`);
+                  } finally {
+                    setSendingReminder(false);
+                  }
+                }}
+                className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-[4px] hover:bg-primary/90 transition-colors flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                <Send className="w-4 h-4" />
+                {sendingReminder ? "Sending..." : "Send"}
+              </button>
+              <button
+                onClick={() => {
+                  setReminderMailDialogOpen(false);
+                  setReminderMailEmailTo("");
+                }}
                 className="px-4 py-2 bg-muted text-foreground rounded-[4px] hover:bg-muted/80 transition-colors"
               >
                 Cancel

@@ -188,7 +188,10 @@ async def send_delayed_reminder_email(
                 reverse=True,
             )
 
-        top10 = sorted_records[:10]
+        if payload.type in ("fnf_open", "fnf_revision"):
+            selected_records = sorted_records
+        else:
+            selected_records = sorted_records[:10]
 
         records_payload = [
             {
@@ -198,7 +201,7 @@ async def send_delayed_reminder_email(
                 "last_working_date": r.last_working_date,
                 "days_delayed": _days_delayed(r.last_working_date),
             }
-            for r in top10
+            for r in selected_records
         ]
 
         outcome = await send_delayed_reminder(
@@ -216,7 +219,7 @@ async def send_delayed_reminder_email(
         return {
             "status": "success",
             "message": outcome["message"],
-            "records_sent": len(top10),
+            "records_sent": len(selected_records),
         }
     except HTTPException:
         raise

@@ -134,6 +134,16 @@ async def fetch_common_records(
                 gcc_initiate.strftime("%Y-%m-%d") if gcc_initiate else ""
             ),
             "fnf_document_count": record.fnf_document_count,
+            "fnf_revision_start_date": (
+                record.fnf_revision_start_date.strftime("%Y-%m-%d")
+                if record.fnf_revision_start_date
+                else ""
+            ),
+            "fnf_revision_completed_date": (
+                record.fnf_revision_completed_date.strftime("%Y-%m-%d")
+                if record.fnf_revision_completed_date
+                else ""
+            ),
             "recovery_pending_dept": "",
             "recovery_amount": 0.0,
             "recovery_status": "",
@@ -199,6 +209,7 @@ async def update_fnf_status(
             return None
 
         today = date.today()
+        was_revision = getattr(record, "is_fnf_revision", False)
 
         if body.is_fnf_closed is not None:
             record.is_fnf_closed = body.is_fnf_closed
@@ -207,7 +218,11 @@ async def update_fnf_status(
                 if not record.fnf_completed_date:
                     record.fnf_completed_date = today
                 # Clear revision flag if marking closed
+                if record.is_fnf_revision or (record.fnf_revision_start_date and not record.fnf_revision_completed_date):
+                    record.fnf_revision_completed_date = today
                 record.is_fnf_revision = False
+                if hasattr(record, "is_fnf_revision_email_sent"):
+                    record.is_fnf_revision_email_sent = False
                 # Propagate department dates
                 await _propagate_department_dates(record.id, today, db)
 
@@ -217,7 +232,11 @@ async def update_fnf_status(
                 if not record.fnf_completed_date:
                     record.fnf_completed_date = today
                 # Clear revision flag if marking completed
+                if record.is_fnf_revision or (record.fnf_revision_start_date and not record.fnf_revision_completed_date):
+                    record.fnf_revision_completed_date = today
                 record.is_fnf_revision = False
+                if hasattr(record, "is_fnf_revision_email_sent"):
+                    record.is_fnf_revision_email_sent = False
                 # Propagate department dates
                 await _propagate_department_dates(record.id, today, db)
             else:
@@ -231,6 +250,10 @@ async def update_fnf_status(
                 record.is_fnf_completed = False
                 record.is_fnf_closed = False
                 record.fnf_completed_date = None
+                record.fnf_revision_start_date = today
+                record.fnf_revision_completed_date = None
+                if not was_revision and hasattr(record, "is_fnf_revision_email_sent"):
+                    record.is_fnf_revision_email_sent = False
 
         if body.fnf_document_count is not None:
             record.fnf_document_count = body.fnf_document_count

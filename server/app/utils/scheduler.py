@@ -81,6 +81,11 @@ async def fnf_completed_sync_loop():
             logger.info("Background F&F Scheduler: Initiating sync...")
             async with async_session() as db:
                 fnf_result = await sync_service.sync_fnf_completed_records(db)
+                try:
+                    from app.services.email_service import send_auto_fnf_emails
+                    await send_auto_fnf_emails(db)
+                except Exception as ex:
+                    logger.exception(f"Background F&F Scheduler: Error during auto email sending: {ex}")
                 
             if fnf_result["records_updated"] > 0 or fnf_result.get("records_reverted", 0) > 0:
                 logger.info(f"Background F&F Scheduler: Successfully synced F&F status - Completed: {fnf_result['records_updated']}, Reverted: {fnf_result.get('records_reverted', 0)}.")

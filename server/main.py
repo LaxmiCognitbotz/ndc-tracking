@@ -10,7 +10,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 import uvicorn
 
-from app.routers import common_api, email_api, ff_api, rm_email_configuration_api, auth
+from app.routers import common_api, email_api, ff_api, rm_email_configuration_api, employee_email_master_api, auth
 from app.utils.response import (
     UnifiedJSONResponse,
     general_exception_handler,
@@ -32,14 +32,56 @@ load_dotenv(verbose=True)
 async def lifespan(app: FastAPI):
     # Seed Super Admins
     from config.database import async_session
-    from sqlalchemy import select
+    from sqlalchemy import select, text
     from app.models.ndc_user_access import NdcUserAccess
     from datetime import datetime, timezone
 
     super_admin_env = os.getenv("SUPER_ADMIN_EMAIL", "")
     super_admins = [e.strip().lower() for e in super_admin_env.split(",") if e.strip()]
 
+    from app.utils.password import hash_password
+
     async with async_session() as session:
+        # Ensure hashed_password, reset_token, reset_token_expires_at exist
+        try:
+            await session.execute(text("ALTER TABLE ndc_user_access ADD COLUMN IF NOT EXISTS hashed_password VARCHAR(255)"))
+            await session.execute(text("ALTER TABLE ndc_user_access ADD COLUMN IF NOT EXISTS reset_token VARCHAR(255)"))
+            await session.execute(text("ALTER TABLE ndc_user_access ADD COLUMN IF NOT EXISTS reset_token_expires_at TIMESTAMP"))
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            try:
+                await session.execute(text("ALTER TABLE ndc_user_access ADD COLUMN hashed_password VARCHAR(255)"))
+                await session.execute(text("ALTER TABLE ndc_user_access ADD COLUMN reset_token VARCHAR(255)"))
+                await session.execute(text("ALTER TABLE ndc_user_access ADD COLUMN reset_token_expires_at TIMESTAMP"))
+                await session.commit()
+            except Exception:
+                await session.rollback()
+
+        # Ensure is_fnf_email_sent exists on ndc_records
+        try:
+            await session.execute(text("ALTER TABLE ndc_records ADD COLUMN IF NOT EXISTS is_fnf_email_sent BOOLEAN DEFAULT false"))
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            try:
+                await session.execute(text("ALTER TABLE ndc_records ADD COLUMN is_fnf_email_sent BOOLEAN DEFAULT false"))
+                await session.commit()
+            except Exception:
+                await session.rollback()
+
+        # Ensure is_fnf_revision_email_sent exists on ndc_records
+        try:
+            await session.execute(text("ALTER TABLE ndc_records ADD COLUMN IF NOT EXISTS is_fnf_revision_email_sent BOOLEAN DEFAULT false"))
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            try:
+                await session.execute(text("ALTER TABLE ndc_records ADD COLUMN is_fnf_revision_email_sent BOOLEAN DEFAULT false"))
+                await session.commit()
+            except Exception:
+                await session.rollback()
+
         for sa_email in super_admins:
             stmt = select(NdcUserAccess).where(NdcUserAccess.email == sa_email)
             res = await session.execute(stmt)
@@ -51,6 +93,7 @@ async def lifespan(app: FastAPI):
                     name=sa_email.split('@')[0],
                     role="super_admin",
                     status="approved",
+                    hashed_password=hash_password("Adani@123"),
                     approved_at=datetime.now(timezone.utc).replace(tzinfo=None),
                     approved_by="system"
                 )
@@ -59,8 +102,32 @@ async def lifespan(app: FastAPI):
                 print(f"Ensuring super admin privileges: {sa_email}")
                 user_access.role = "super_admin"
                 user_access.status = "approved"
+                if not user_access.hashed_password:
+                    user_access.hashed_password = hash_password("Adani@123")
                 # Update attributes in-place to ensure SQLAlchemy flushes correctly
                 session.add(user_access)
+
+        # Seed regular demo admin
+        stmt = select(NdcUserAccess).where(NdcUserAccess.email == "demo.admin@adani.com")
+        res = await session.execute(stmt)
+        demo_admin = res.scalar_one_or_none()
+        if not demo_admin:
+            print("Seeding demo admin: demo.admin@adani.com")
+            demo_admin = NdcUserAccess(
+                email="demo.admin@adani.com",
+                name="Demo Admin",
+                role="admin",
+                status="approved",
+                hashed_password=hash_password("Adani@123"),
+                approved_at=datetime.now(timezone.utc).replace(tzinfo=None),
+                approved_by="system"
+            )
+            session.add(demo_admin)
+        else:
+            if not demo_admin.hashed_password:
+                demo_admin.hashed_password = hash_password("Adani@123")
+            session.add(demo_admin)
+
         await session.commit()
 
     # Start the background tasks
@@ -141,6 +208,7 @@ app.include_router(common_api.router)
 app.include_router(email_api.router)
 app.include_router(ff_api.router)
 app.include_router(rm_email_configuration_api.router)
+app.include_router(employee_email_master_api.router)
 app.include_router(auth.router)
 app.include_router(auth.admin_router)
 

@@ -66,6 +66,8 @@ class CommonNDCRecord(BaseModel):
     is_fnf_revision: bool = False
     gcc_initiate_date: str = ""
     fnf_document_count: int = 0
+    fnf_revision_start_date: str = ""
+    fnf_revision_completed_date: str = ""
     recovery_pending_dept: str
     recovery_amount: float
     recovery_status: str

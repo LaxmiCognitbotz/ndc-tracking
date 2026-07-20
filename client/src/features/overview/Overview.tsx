@@ -853,7 +853,7 @@ export function Overview() {
                 disabled={fnfDelayedData.length === 0}
                 onClick={() => {
                   setReminderMailEmailTo("");
-                  setReminderMailType("ndc_delayed");
+                  setReminderMailType("fnf_open");
                   setReminderMailDialogOpen(true);
                 }}
                 className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground text-sm rounded-[4px] hover:bg-primary/90 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"

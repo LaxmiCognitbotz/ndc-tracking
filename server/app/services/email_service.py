@@ -64,28 +64,28 @@ def _build_html(records: list[dict], reminder_type: str = "ndc_delayed") -> str:
     for rec in records:
         days = rec.get("days_delayed", 0)
         if reminder_type == "fnf_open":
-            status_td = '<td><span style="color:#0b3d91;font-weight:600;">Open</span></td>'
+            status_td = '<td style="padding:12px 14px;font-family:Arial,sans-serif;font-size:13px;color:#333333;border-bottom:1px solid #ececec;"><span style="color:#0b3d91;font-weight:600;">Open</span></td>'
         elif reminder_type == "fnf_revision":
-            status_td = '<td><span class="delay">Revision Required</span></td>'
+            status_td = '<td style="padding:12px 14px;font-family:Arial,sans-serif;font-size:13px;color:#333333;border-bottom:1px solid #ececec;"><span style="background-color:#ffe5e5;color:#d62828;padding:4px 10px;border-radius:12px;font-weight:600;display:inline-block;">Revision Required</span></td>'
         else:
-            status_td = f'<td><span class="delay">{days} Days</span></td>'
+            status_td = f'<td style="padding:12px 14px;font-family:Arial,sans-serif;font-size:13px;color:#333333;border-bottom:1px solid #ececec;"><span style="background-color:#ffe5e5;color:#d62828;padding:4px 10px;border-radius:12px;font-weight:600;display:inline-block;">{days} Days</span></td>'
 
         row_html += f"""
         <tr>
-          <td>{rec.get('person_number', '')}</td>
-          <td>{rec.get('employee_name', '')}</td>
-          <td>{rec.get('department', '—')}</td>
-          <td>{_fmt_date(rec.get('last_working_date'))}</td>
+          <td style="padding:12px 14px;font-family:Arial,sans-serif;font-size:13px;color:#333333;border-bottom:1px solid #ececec;">{rec.get('person_number', '')}</td>
+          <td style="padding:12px 14px;font-family:Arial,sans-serif;font-size:13px;color:#333333;border-bottom:1px solid #ececec;">{rec.get('employee_name', '')}</td>
+          <td style="padding:12px 14px;font-family:Arial,sans-serif;font-size:13px;color:#333333;border-bottom:1px solid #ececec;">{rec.get('department', '—')}</td>
+          <td style="padding:12px 14px;font-family:Arial,sans-serif;font-size:13px;color:#333333;border-bottom:1px solid #ececec;">{_fmt_date(rec.get('last_working_date'))}</td>
           {status_td}
         </tr>"""
 
     if reminder_type == "fnf_open":
-        title = "F&F Open Cases – Top 10 Report"
-        intro = f"Please find below the list of the <b>Top {min(len(records), 10)} F&F open cases</b> identified as of today ({_fmt_date(date.today())})."
+        title = "F&F Open Cases Report"
+        intro = f"Please find below the list of the F&F open cases identified as of today ({_fmt_date(date.today())})."
         col_5 = "F&F Status"
     elif reminder_type == "fnf_revision":
-        title = "F&F Revision Required Cases – Top 10 Report"
-        intro = f"Please find below the list of the <b>Top {min(len(records), 10)} F&F revision required cases</b> identified as of today ({_fmt_date(date.today())})."
+        title = "F&F Revision Required Cases Report"
+        intro = f"Please find below the list of the F&F revision required cases identified as of today ({_fmt_date(date.today())})."
         col_5 = "F&F Status"
     else:
         title = "NDC Delayed Cases – Top 10 Report"
@@ -96,55 +96,57 @@ def _build_html(records: list[dict], reminder_type: str = "ndc_delayed") -> str:
 <html>
 <head>
 <meta charset="UTF-8">
-<style>
-body{{background:#f5f7fb;font-family:Arial,sans-serif;padding:30px;}}
-.container{{max-width:1000px;margin:auto;background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.08);}}
-.header{{background:#0b3d91;color:white;padding:25px 35px;}}
-.header h2{{margin:0;}}
-.content{{padding:30px;color:#333;line-height:1.7;}}
-.summary{{background:#f4f8ff;padding:14px 18px;border-left:4px solid #0b3d91;margin:20px 0;}}
-table{{width:100%;border-collapse:collapse;margin-top:15px;}}
-th{{background:#eef3fb;padding:14px;text-align:left;}}
-td{{padding:14px;border-bottom:1px solid #ececec;}}
-.delay{{background:#ffe5e5;color:#d62828;padding:6px 12px;border-radius:20px;font-weight:600;}}
-.note{{background:#fff7e6;padding:16px;margin-top:25px;border-left:4px solid #ffb020;}}
-.footer{{padding:25px 30px;background:#fafafa;color:#666;}}
-</style>
 </head>
-<body>
-<div class="container">
-  <div class="header">
-    <h2>{title}</h2>
-  </div>
-  <div class="content">
-    <p>Hello Team,</p>
-    <p>
-      {intro}
-      These records require attention for closure.
-    </p>
-    <table>
-      <tr>
-        <th>Employee ID</th>
-        <th>Name</th>
-        <th>Department</th>
-        <th>Pending Since</th>
-        <th>{col_5}</th>
-      </tr>
-      {row_html}
-    </table>
-    <div class="note">
-      Please review the above cases and take the required actions at the earliest
-      to avoid further aging and ensure timely closure.
-    </div>
-    <p>If any of these records have already been processed, kindly ignore this notification.</p>
-    <p>Thank you for your support.</p>
-  </div>
-  <div class="footer">
-    Regards,<br>
-    <b>Automation Team</b><br>
-    NDC Monitoring System
-  </div>
-</div>
+<body style="background-color:#f5f7fb;font-family:Arial,sans-serif;margin:0;padding:30px;">
+<table width="100%" border="0" cellspacing="0" cellpadding="0" bgcolor="#f5f7fb" style="background-color:#f5f7fb;width:100%;">
+  <tr>
+    <td align="center" style="padding:20px 0;">
+      <table class="container" width="800" border="0" cellspacing="0" cellpadding="0" style="width:800px;max-width:800px;background-color:#ffffff;border-radius:10px;border:1px solid #e5e7eb;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.08);border-collapse:separate;">
+        <tr>
+          <td class="header" bgcolor="#0b3d91" style="background-color:#0b3d91;padding:25px 35px;color:white;">
+            <h2 style="margin:0;font-family:Arial,sans-serif;font-size:22px;color:#ffffff;font-weight:bold;">{title}</h2>
+          </td>
+        </tr>
+        <tr>
+          <td class="content" style="padding:30px;color:#333333;font-family:Arial,sans-serif;font-size:14px;line-height:1.7;">
+            <p style="margin:0 0 16px 0;">Hello Team,</p>
+            <p style="margin:0 0 16px 0;">
+              {intro}
+              These records require attention for closure.
+            </p>
+            <table width="100%" border="0" cellspacing="0" cellpadding="0" style="width:100%;border-collapse:collapse;margin-top:15px;">
+              <thead>
+                <tr bgcolor="#eef3fb" style="background-color:#eef3fb;">
+                  <th style="padding:12px 14px;font-family:Arial,sans-serif;font-size:13px;font-weight:bold;text-align:left;color:#333333;border-bottom:1px solid #ececec;">Employee ID</th>
+                  <th style="padding:12px 14px;font-family:Arial,sans-serif;font-size:13px;font-weight:bold;text-align:left;color:#333333;border-bottom:1px solid #ececec;">Name</th>
+                  <th style="padding:12px 14px;font-family:Arial,sans-serif;font-size:13px;font-weight:bold;text-align:left;color:#333333;border-bottom:1px solid #ececec;">Department</th>
+                  <th style="padding:12px 14px;font-family:Arial,sans-serif;font-size:13px;font-weight:bold;text-align:left;color:#333333;border-bottom:1px solid #ececec;">Pending Since</th>
+                  <th style="padding:12px 14px;font-family:Arial,sans-serif;font-size:13px;font-weight:bold;text-align:left;color:#333333;border-bottom:1px solid #ececec;">{col_5}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {row_html}
+              </tbody>
+            </table>
+            <div class="note" style="background-color:#fff7e6;padding:16px;margin-top:25px;border-left:4px solid #ffb020;font-family:Arial,sans-serif;font-size:13.5px;color:#666666;line-height:1.5;">
+              Please review the above cases and take the required actions at the earliest
+              to avoid further aging and ensure timely closure.
+            </div>
+            <p style="margin:20px 0 16px 0;">If any of these records have already been processed, kindly ignore this notification.</p>
+            <p style="margin:0;">Thank you for your support.</p>
+          </td>
+        </tr>
+        <tr>
+          <td class="footer" bgcolor="#fafafa" style="padding:25px 30px;background-color:#fafafa;color:#666666;border-top:1px solid #ececec;font-family:Arial,sans-serif;font-size:12.5px;line-height:1.5;">
+            Regards,<br>
+            <b style="color:#333333;">Automation Team</b><br>
+            NDC Monitoring System
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
 </body>
 </html>"""
     return html
@@ -190,13 +192,16 @@ async def send_delayed_reminder(
 
     if reminder_type == "fnf_open":
         subj_title = "F&F Open Cases Reminder"
+        subject_line = f"{subj_title} – {len(records)} Records ({_fmt_date(date.today())})"
     elif reminder_type == "fnf_revision":
         subj_title = "F&F Revision Required Cases Reminder"
+        subject_line = f"{subj_title} – {len(records)} Records ({_fmt_date(date.today())})"
     else:
         subj_title = "NDC Delayed Cases Reminder"
+        subject_line = f"{subj_title} – Top {min(len(records), 10)} Records ({_fmt_date(date.today())})"
 
     msg = MIMEMultipart("alternative")
-    msg["Subject"] = f"{subj_title} – Top {min(len(records), 10)} Records ({_fmt_date(date.today())})"
+    msg["Subject"] = subject_line
     msg["From"] = smtp_from
     msg["To"] = recipient
     msg.attach(MIMEText(html_body, "html"))
@@ -243,126 +248,64 @@ async def send_fnf_details_email(email_to: str, record: dict) -> dict:
 <html>
 <head>
 <meta charset="UTF-8">
-<style>
-  body {{
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-    color: #334155;
-    background-color: #f8fafc;
-    padding: 30px 15px;
-    margin: 0;
-  }}
-  .container {{
-    max-width: 560px;
-    margin: 0 auto;
-    background: #ffffff;
-    border-radius: 8px;
-    border-top: 4px solid #0f766e;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
-    overflow: hidden;
-    border-left: 1px solid #e2e8f0;
-    border-right: 1px solid #e2e8f0;
-    border-bottom: 1px solid #e2e8f0;
-  }}
-  .content {{
-    padding: 32px 24px;
-  }}
-  h2 {{
-    color: #0f766e;
-    font-size: 18px;
-    font-weight: 600;
-    margin-top: 0;
-    margin-bottom: 20px;
-    border-bottom: 1px solid #e2e8f0;
-    padding-bottom: 10px;
-  }}
-  p {{
-    margin: 0 0 16px;
-    font-size: 14px;
-    line-height: 1.6;
-    color: #475569;
-  }}
-  .details-table {{
-    width: 100%;
-    border-collapse: collapse;
-    margin: 20px 0;
-    font-size: 13.5px;
-  }}
-  .details-table td {{
-    padding: 10px 12px;
-    border-bottom: 1px solid #f1f5f9;
-  }}
-  .details-table tr:last-child td {{
-    border-bottom: none;
-  }}
-  .label {{
-    font-weight: 600;
-    color: #64748b;
-    width: 38%;
-  }}
-  .value {{
-    color: #0f172a;
-    font-weight: 500;
-  }}
-  .footer {{
-    background-color: #f8fafc;
-    padding: 20px 24px;
-    border-top: 1px solid #e2e8f0;
-    font-size: 12.5px;
-    color: #64748b;
-    line-height: 1.5;
-  }}
-  .footer strong {{
-    color: #475569;
-  }}
-</style>
 </head>
-<body>
-<div class="container">
-  <div class="content">
-    <h2>Full &amp; Final Settlement Details</h2>
-    <p>Dear Recipient,</p>
-    <p>Please find below the Full &amp; Final (F&amp;F) settlement details for the employee clearance request:</p>
-    
-    <table class="details-table">
-      <tr>
-        <td class="label">Employee Name:</td>
-        <td class="value">{record.get('employee_name')}</td>
-      </tr>
-      <tr>
-        <td class="label">Person Number:</td>
-        <td class="value">{record.get('person_number')}</td>
-      </tr>
-      <tr>
-        <td class="label">Department:</td>
-        <td class="value">{record.get('department')}</td>
-      </tr>
-      <tr>
-        <td class="label">Resignation Date:</td>
-        <td class="value">{_fmt_date(record.get('resignation_date'))}</td>
-      </tr>
-      <tr>
-        <td class="label">Last Working Date:</td>
-        <td class="value">{_fmt_date(record.get('last_working_date'))}</td>
-      </tr>
-      <tr>
-        <td class="label">F&amp;F Status:</td>
-        <td class="value">{record.get('fnf_status')}</td>
-      </tr>
-      <tr>
-        <td class="label">Completed Date:</td>
-        <td class="value">{_fmt_date(record.get('fnf_completed_date'))}</td>
-      </tr>
-      <tr>
-        <td class="label">Document Count:</td>
-        <td class="value">{record.get('fnf_document_count', 0)}</td>
-      </tr>
-    </table>
-  </div>
-  <div class="footer">
-    Regards,<br>
-    <strong>NDC Monitoring System</strong>
-  </div>
-</div>
+<body style="background-color:#f8fafc;font-family:Arial,sans-serif;margin:0;padding:30px 15px;">
+<table width="100%" border="0" cellspacing="0" cellpadding="0" bgcolor="#f8fafc" style="background-color:#f8fafc;width:100%;">
+  <tr>
+    <td align="center" style="padding:20px 0;">
+      <table class="container" width="560" border="0" cellspacing="0" cellpadding="0" style="width:560px;max-width:560px;background-color:#ffffff;border-radius:8px;border:1px solid #e2e8f0;border-top:4px solid #0f766e;overflow:hidden;box-shadow:0 4px 6px -1px rgba(0, 0, 0, 0.05);border-collapse:separate;">
+        <tr>
+          <td class="content" style="padding:32px 24px;color:#334155;font-family:Arial,sans-serif;font-size:14px;line-height:1.6;">
+            <h2 style="color:#0f766e;font-size:18px;font-weight:600;margin-top:0;margin-bottom:20px;border-bottom:1px solid #e2e8f0;padding-bottom:10px;font-family:Arial,sans-serif;">Full &amp; Final Settlement Details</h2>
+            <p style="margin:0 0 16px;font-size:14px;line-height:1.6;color:#475569;font-family:Arial,sans-serif;">Dear Recipient,</p>
+            <p style="margin:0 0 16px;font-size:14px;line-height:1.6;color:#475569;font-family:Arial,sans-serif;">Please find below the Full &amp; Final (F&amp;F) settlement details for the employee clearance request:</p>
+            
+            <table class="details-table" width="100%" border="0" cellspacing="0" cellpadding="0" style="width:100%;border-collapse:collapse;margin:20px 0;">
+              <tr>
+                <td class="label" style="padding:10px 12px;border-bottom:1px solid #f1f5f9;font-weight:600;color:#64748b;width:38%;font-family:Arial,sans-serif;font-size:13.5px;">Employee Name:</td>
+                <td class="value" style="padding:10px 12px;border-bottom:1px solid #f1f5f9;color:#0f172a;font-weight:500;font-family:Arial,sans-serif;font-size:13.5px;">{record.get('employee_name')}</td>
+              </tr>
+              <tr>
+                <td class="label" style="padding:10px 12px;border-bottom:1px solid #f1f5f9;font-weight:600;color:#64748b;width:38%;font-family:Arial,sans-serif;font-size:13.5px;">Person Number:</td>
+                <td class="value" style="padding:10px 12px;border-bottom:1px solid #f1f5f9;color:#0f172a;font-weight:500;font-family:Arial,sans-serif;font-size:13.5px;">{record.get('person_number')}</td>
+              </tr>
+              <tr>
+                <td class="label" style="padding:10px 12px;border-bottom:1px solid #f1f5f9;font-weight:600;color:#64748b;width:38%;font-family:Arial,sans-serif;font-size:13.5px;">Department:</td>
+                <td class="value" style="padding:10px 12px;border-bottom:1px solid #f1f5f9;color:#0f172a;font-weight:500;font-family:Arial,sans-serif;font-size:13.5px;">{record.get('department')}</td>
+              </tr>
+              <tr>
+                <td class="label" style="padding:10px 12px;border-bottom:1px solid #f1f5f9;font-weight:600;color:#64748b;width:38%;font-family:Arial,sans-serif;font-size:13.5px;">Resignation Date:</td>
+                <td class="value" style="padding:10px 12px;border-bottom:1px solid #f1f5f9;color:#0f172a;font-weight:500;font-family:Arial,sans-serif;font-size:13.5px;">{_fmt_date(record.get('resignation_date'))}</td>
+              </tr>
+              <tr>
+                <td class="label" style="padding:10px 12px;border-bottom:1px solid #f1f5f9;font-weight:600;color:#64748b;width:38%;font-family:Arial,sans-serif;font-size:13.5px;">Last Working Date:</td>
+                <td class="value" style="padding:10px 12px;border-bottom:1px solid #f1f5f9;color:#0f172a;font-weight:500;font-family:Arial,sans-serif;font-size:13.5px;">{_fmt_date(record.get('last_working_date'))}</td>
+              </tr>
+              <tr>
+                <td class="label" style="padding:10px 12px;border-bottom:1px solid #f1f5f9;font-weight:600;color:#64748b;width:38%;font-family:Arial,sans-serif;font-size:13.5px;">F&amp;F Status:</td>
+                <td class="value" style="padding:10px 12px;border-bottom:1px solid #f1f5f9;color:#0f172a;font-weight:500;font-family:Arial,sans-serif;font-size:13.5px;">{record.get('fnf_status')}</td>
+              </tr>
+              <tr>
+                <td class="label" style="padding:10px 12px;border-bottom:1px solid #f1f5f9;font-weight:600;color:#64748b;width:38%;font-family:Arial,sans-serif;font-size:13.5px;">Completed Date:</td>
+                <td class="value" style="padding:10px 12px;border-bottom:1px solid #f1f5f9;color:#0f172a;font-weight:500;font-family:Arial,sans-serif;font-size:13.5px;">{_fmt_date(record.get('fnf_completed_date'))}</td>
+              </tr>
+              <tr>
+                <td class="label" style="padding:10px 12px;border-bottom:none;font-weight:600;color:#64748b;width:38%;font-family:Arial,sans-serif;font-size:13.5px;">Document Count:</td>
+                <td class="value" style="padding:10px 12px;border-bottom:none;color:#0f172a;font-weight:500;font-family:Arial,sans-serif;font-size:13.5px;">{record.get('fnf_document_count', 0)}</td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        <tr>
+          <td class="footer" bgcolor="#f8fafc" style="background-color:#f8fafc;padding:20px 24px;border-top:1px solid #e2e8f0;font-family:Arial,sans-serif;font-size:12.5px;color:#64748b;line-height:1.5;">
+            Regards,<br>
+            <strong style="color:#475569;">NDC Monitoring System</strong>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
 </body>
 </html>"""
 
@@ -580,10 +523,10 @@ def send_notification_email(records, recipient, stage_name, manager_name=None, i
         lwd = _fmt_date(rec.last_working_date)
         row_html += f"""
         <tr>
-          <td>{rec.person_number}</td>
-          <td>{rec.employee_name}</td>
-          <td>{rec.department or '—'}</td>
-          <td>{lwd}</td>
+          <td style="padding:12px 14px;font-family:Arial,sans-serif;font-size:13px;color:#333333;border-bottom:1px solid #ececec;">{rec.person_number}</td>
+          <td style="padding:12px 14px;font-family:Arial,sans-serif;font-size:13px;color:#333333;border-bottom:1px solid #ececec;">{rec.employee_name}</td>
+          <td style="padding:12px 14px;font-family:Arial,sans-serif;font-size:13px;color:#333333;border-bottom:1px solid #ececec;">{rec.department or '—'}</td>
+          <td style="padding:12px 14px;font-family:Arial,sans-serif;font-size:13px;color:#333333;border-bottom:1px solid #ececec;">{lwd}</td>
         </tr>"""
 
     greeting = f"Dear {manager_name}," if manager_name else "Hello,"
@@ -592,7 +535,7 @@ def send_notification_email(records, recipient, stage_name, manager_name=None, i
         greeting = "Dear HR Team,"
         clean_name = manager_name.replace(" (Conflict Redirected)", "")
         warning_html = f"""
-        <p style="color: #d9534f; font-weight: bold; background-color: #fdf7f7; border: 1px solid #d9534f; padding: 12px; border-radius: 5px; margin-bottom: 15px;">
+        <p style="color: #d9534f; font-family: Arial, sans-serif; font-size: 14px; font-weight: bold; background-color: #fdf7f7; border: 1px solid #d9534f; padding: 12px; border-radius: 5px; margin-bottom: 15px; margin-top: 0;">
           Warning: This report has been redirected to HR because there are multiple conflicting email configurations for manager '{clean_name}' in the system.
         </p>
         """
@@ -600,50 +543,65 @@ def send_notification_email(records, recipient, stage_name, manager_name=None, i
     if is_tomorrow:
         tomorrow_str = _fmt_date(date.today() + timedelta(days=1))
         intro_paragraph = f"""
-        <p>The following users are currently pending in the <b>{stage_name}</b> Approval stage.</p>
-        <p>These records have their last working date set for tomorrow ({tomorrow_str}):</p>
+        <p style="margin: 0 0 16px 0;">The following users are currently pending in the <b>{stage_name}</b> Approval stage.</p>
+        <p style="margin: 0 0 16px 0;">These records have their last working date set for tomorrow ({tomorrow_str}):</p>
         """
         subject = f"Pending {stage_name} Approvals Report - Action Required Tomorrow"
+        header_title = f"Pending {stage_name} Approval Records"
     else:
-        intro_paragraph = f"<p>The following users are currently pending in the <b>{stage_name}</b> Approval stage.</p>"
-        subject = f"Pending {stage_name} Approvals Report - Action Required"
+        if stage_name == "F&F Team":
+            intro_paragraph = "<p style=\"margin: 0 0 16px 0;\">The following users are currently on the <b>F&F Open</b> list.</p>"
+            subject = "F&F Open List Report - Action Required"
+            header_title = "F&F Open List Records"
+        elif stage_name == "F&F Revision Required":
+            intro_paragraph = "<p style=\"margin: 0 0 16px 0;\">The following users currently require <b>F&F Revision</b>.</p>"
+            subject = "F&F Revision Required - Action Required"
+            header_title = "F&F Revision Required Records"
+        else:
+            intro_paragraph = f"<p style=\"margin: 0 0 16px 0;\">The following users are currently pending in the <b>{stage_name}</b> Approval stage.</p>"
+            subject = f"Pending {stage_name} Approvals Report - Action Required"
+            header_title = f"Pending {stage_name} Approval Records"
 
     html_body = f"""<!DOCTYPE html>
 <html>
 <head>
 <meta charset="UTF-8">
-<style>
-body {{background:#f5f7fb;font-family:Arial,sans-serif;padding:30px;}}
-.container {{max-width:800px;margin:auto;background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.08);}}
-.header {{background:#0b3d91;color:white;padding:25px 35px;}}
-.header h2 {{margin:0;}}
-.content {{padding:30px;color:#333;line-height:1.7;}}
-table {{width:100%;border-collapse:collapse;margin-top:15px;}}
-th {{background:#eef3fb;padding:14px;text-align:left;}}
-td {{padding:14px;border-bottom:1px solid #ececec;}}
-</style>
 </head>
-<body>
-<div class="container">
-  <div class="header">
-    <h2>Pending {stage_name} Approval Records</h2>
-  </div>
-  <div class="content">
-    <p>{greeting}</p>
-    {warning_html}
-    {intro_paragraph}
-    <table>
-      <tr>
-        <th>Employee ID</th>
-        <th>Name</th>
-        <th>Department</th>
-        <th>Last Working Date</th>
-      </tr>
-      {row_html}
-    </table>
-    <p>Please review these records and take the necessary actions.</p>
-  </div>
-</div>
+<body style="background-color:#f5f7fb;font-family:Arial,sans-serif;margin:0;padding:30px;">
+<table width="100%" border="0" cellspacing="0" cellpadding="0" bgcolor="#f5f7fb" style="background-color:#f5f7fb;width:100%;">
+  <tr>
+    <td align="center" style="padding:20px 0;">
+      <table class="container" width="800" border="0" cellspacing="0" cellpadding="0" style="width:800px;max-width:800px;background-color:#ffffff;border-radius:10px;border:1px solid #e5e7eb;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.08);border-collapse:separate;">
+        <tr>
+          <td class="header" bgcolor="#0b3d91" style="background-color:#0b3d91;color:white;padding:25px 35px;">
+            <h2 style="margin:0;font-family:Arial,sans-serif;font-size:22px;color:#ffffff;font-weight:bold;">{header_title}</h2>
+          </td>
+        </tr>
+        <tr>
+          <td class="content" style="padding:30px;color:#333333;font-family:Arial,sans-serif;font-size:14px;line-height:1.7;">
+            <p style="margin:0 0 16px 0;">{greeting}</p>
+            {warning_html}
+            {intro_paragraph}
+            <table width="100%" border="0" cellspacing="0" cellpadding="0" style="width:100%;border-collapse:collapse;margin-top:15px;">
+              <thead>
+                <tr bgcolor="#eef3fb" style="background-color:#eef3fb;">
+                  <th style="padding:12px 14px;font-family:Arial,sans-serif;font-size:13px;font-weight:bold;text-align:left;color:#333333;border-bottom:1px solid #ececec;">Employee ID</th>
+                  <th style="padding:12px 14px;font-family:Arial,sans-serif;font-size:13px;font-weight:bold;text-align:left;color:#333333;border-bottom:1px solid #ececec;">Name</th>
+                  <th style="padding:12px 14px;font-family:Arial,sans-serif;font-size:13px;font-weight:bold;text-align:left;color:#333333;border-bottom:1px solid #ececec;">Department</th>
+                  <th style="padding:12px 14px;font-family:Arial,sans-serif;font-size:13px;font-weight:bold;text-align:left;color:#333333;border-bottom:1px solid #ececec;">Last Working Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {row_html}
+              </tbody>
+            </table>
+            <p style="margin:20px 0 0 0;">Please review these records and take the necessary actions.</p>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
 </body>
 </html>"""
 
@@ -689,51 +647,55 @@ def send_duplicate_managers_report(records, recipient):
         lwd = _fmt_date(rec.last_working_date)
         row_html += f"""
         <tr>
-          <td style="font-weight: bold; color: #d9534f;">{rm_name}</td>
-          <td>{rec.person_number}</td>
-          <td>{rec.employee_name}</td>
-          <td>{rec.department or '—'}</td>
-          <td>{lwd}</td>
+          <td style="padding:12px 14px;font-family:Arial,sans-serif;font-size:13px;font-weight:bold;color:#d9534f;border-bottom:1px solid #ececec;">{rm_name}</td>
+          <td style="padding:12px 14px;font-family:Arial,sans-serif;font-size:13px;color:#333333;border-bottom:1px solid #ececec;">{rec.person_number}</td>
+          <td style="padding:12px 14px;font-family:Arial,sans-serif;font-size:13px;color:#333333;border-bottom:1px solid #ececec;">{rec.employee_name}</td>
+          <td style="padding:12px 14px;font-family:Arial,sans-serif;font-size:13px;color:#333333;border-bottom:1px solid #ececec;">{rec.department or '—'}</td>
+          <td style="padding:12px 14px;font-family:Arial,sans-serif;font-size:13px;color:#333333;border-bottom:1px solid #ececec;">{lwd}</td>
         </tr>"""
 
     html_body = f"""<!DOCTYPE html>
 <html>
 <head>
 <meta charset="UTF-8">
-<style>
-body {{background:#f5f7fb;font-family:Arial,sans-serif;padding:30px;}}
-.container {{max-width:850px;margin:auto;background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.08);}}
-.header {{background:#d9534f;color:white;padding:25px 35px;}}
-.header h2 {{margin:0;}}
-.content {{padding:30px;color:#333;line-height:1.7;}}
-table {{width:100%;border-collapse:collapse;margin-top:15px;}}
-th {{background:#fdf7f7;padding:14px;text-align:left;border-bottom:2px solid #d9534f;}}
-td {{padding:14px;border-bottom:1px solid #ececec;}}
-</style>
 </head>
-<body>
-<div class="container">
-  <div class="header">
-    <h2>Conflicting RM Configurations - Redirected Approvals Report</h2>
-  </div>
-  <div class="content">
-    <p>Dear HR Team,</p>
-    <p style="color: #d9534f; font-weight: bold; background-color: #fdf7f7; border: 1px solid #d9534f; padding: 12px; border-radius: 5px; margin-bottom: 15px;">
-      Warning: The following pending RM approvals have been redirected to HR because their Reporting Managers have multiple conflicting email configurations in the system. Please resolve these duplicates in the <b>rm_email_configuration</b> database table.
-    </p>
-    <table>
-      <tr>
-        <th>Reporting Manager</th>
-        <th>Employee ID</th>
-        <th>Name</th>
-        <th>Department</th>
-        <th>Last Working Date</th>
-      </tr>
-      {row_html}
-    </table>
-    <p>Please review these records and take the necessary actions.</p>
-  </div>
-</div>
+<body style="background-color:#f5f7fb;font-family:Arial,sans-serif;margin:0;padding:30px;">
+<table width="100%" border="0" cellspacing="0" cellpadding="0" bgcolor="#f5f7fb" style="background-color:#f5f7fb;width:100%;">
+  <tr>
+    <td align="center" style="padding:20px 0;">
+      <table class="container" width="800" border="0" cellspacing="0" cellpadding="0" style="width:800px;max-width:800px;background-color:#ffffff;border-radius:10px;border:1px solid #e5e7eb;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.08);border-collapse:separate;">
+        <tr>
+          <td class="header" bgcolor="#d9534f" style="background-color:#d9534f;color:white;padding:25px 35px;">
+            <h2 style="margin:0;font-family:Arial,sans-serif;font-size:22px;font-weight:bold;color:#ffffff;">Conflicting RM Configurations - Redirected Approvals Report</h2>
+          </td>
+        </tr>
+        <tr>
+          <td class="content" style="padding:30px;color:#333333;font-family:Arial,sans-serif;font-size:14px;line-height:1.7;">
+            <p style="margin:0 0 16px 0;">Dear HR Team,</p>
+            <p style="color: #d9534f; font-weight: bold; background-color: #fdf7f7; border: 1px solid #d9534f; padding: 12px; border-radius: 5px; margin-bottom: 15px; margin-top:0;">
+              Warning: The following pending RM approvals have been redirected to HR because their Reporting Managers have multiple conflicting email configurations in the system. Please resolve these duplicates in the <b>rm_email_configuration</b> database table.
+            </p>
+            <table width="100%" border="0" cellspacing="0" cellpadding="0" style="width:100%;border-collapse:collapse;margin-top:15px;">
+              <thead>
+                <tr bgcolor="#fdf7f7" style="background-color:#fdf7f7;">
+                  <th style="padding:12px 14px;font-family:Arial,sans-serif;font-size:13px;font-weight:bold;text-align:left;color:#333333;border-bottom:2px solid #d9534f;">Reporting Manager</th>
+                  <th style="padding:12px 14px;font-family:Arial,sans-serif;font-size:13px;font-weight:bold;text-align:left;color:#333333;border-bottom:2px solid #d9534f;">Employee ID</th>
+                  <th style="padding:12px 14px;font-family:Arial,sans-serif;font-size:13px;font-weight:bold;text-align:left;color:#333333;border-bottom:2px solid #d9534f;">Name</th>
+                  <th style="padding:12px 14px;font-family:Arial,sans-serif;font-size:13px;font-weight:bold;text-align:left;color:#333333;border-bottom:2px solid #d9534f;">Department</th>
+                  <th style="padding:12px 14px;font-family:Arial,sans-serif;font-size:13px;font-weight:bold;text-align:left;color:#333333;border-bottom:2px solid #d9534f;">Last Working Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {row_html}
+              </tbody>
+            </table>
+            <p style="margin:20px 0 0 0;">Please review these records and take the necessary actions.</p>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
 </body>
 </html>"""
 
@@ -861,6 +823,7 @@ async def run_10am_job():
             
     rm_groups = {}  # key: (rm_name, rm_email) -> value: list of NdcRecord
     duplicate_rm_records = []  # list of (rm_name, rec)
+    fnf_revision_records = []  # list of NdcRecord for F&F Revision Required (sent only once)
     
     departments = [
         ("HR", dept_email_map.get("hr")),
@@ -873,6 +836,7 @@ async def run_10am_job():
         ("Final Abex", dept_email_map.get("final abex")),
         ("Business Specific", dept_email_map.get("business specific")),
         ("Legatrix", dept_email_map.get("legatrix")),
+        ("F&F Team", dept_email_map.get("f&f team")),
     ]
     
     emails_to_send = {dep: [] for dep, _ in departments}
@@ -938,9 +902,21 @@ async def run_10am_job():
                 
                 if current_status == "pending" and all_completed:
                     emails_to_send[dept_name].append(rec)
+            elif dept_name == "F&F Team":
+                # Specific rule for F&F Team (F&F Open list)
+                is_eligible = rec.ndc_stage == "NDC Completed" and approvals.get("gcc hr") == "completed"
+                is_fnf_open = is_eligible and (not rec.is_fnf_completed) and (not rec.is_fnf_revision)
+                if is_fnf_open:
+                    emails_to_send[dept_name].append(rec)
             else:
                 if current_status == "pending":
                     emails_to_send[dept_name].append(rec)
+
+        # Collect new F&F Revision Required records (to send only once to F&F Team)
+        is_fnf_revision = getattr(rec, "is_fnf_revision", False)
+        is_fnf_revision_email_sent = getattr(rec, "is_fnf_revision_email_sent", False)
+        if is_fnf_revision and not is_fnf_revision_email_sent:
+            fnf_revision_records.append(rec)
                         
     # Send RM emails in batches
     rm_group_items = list(rm_groups.items())
@@ -999,6 +975,36 @@ async def run_10am_job():
             send_notification_email(records_for_dept, recipient, dept_name)
         else:
             logger.info(f"No pending records for {dept_name}. Skipping email.")
+
+    # Send daily F&F Revision Required email to F&F Team (only once per record)
+    if fnf_revision_records:
+        ff_recipient = dept_email_map.get("f&f team")
+        if not ff_recipient:
+            ff_recipient = os.getenv("EMAIL_RECIPIENT", "")
+            
+        if ff_recipient:
+            logger.info(f"Sending daily F&F Revision Required email with {len(fnf_revision_records)} records to {ff_recipient}...")
+            loop = asyncio.get_event_loop()
+            success = await loop.run_in_executor(
+                None,
+                send_notification_email,
+                fnf_revision_records,
+                ff_recipient,
+                "F&F Revision Required"
+            )
+            if success:
+                # Mark as email sent in database
+                async with async_session() as session:
+                    for r in fnf_revision_records:
+                        stmt = select(NdcRecord).where(NdcRecord.id == r.id)
+                        db_res = await session.execute(stmt)
+                        db_rec = db_res.scalar_one_or_none()
+                        if db_rec:
+                            db_rec.is_fnf_revision_email_sent = True
+                    await session.commit()
+                logger.info("Successfully sent daily F&F Revision Required email and updated is_fnf_revision_email_sent flags in DB.")
+        else:
+            logger.warning("F&F Team email recipient not configured. Skipping daily F&F Revision Required email.")
 
 
 async def get_pending_records_for_tomorrow(stage_keyword: str):
@@ -1072,4 +1078,178 @@ async def run_tomorrow_alert_job():
         recipient=dept_email_map.get("security"), 
         stage_name="Security"
     )
+
+
+async def send_auto_fnf_emails(db: AsyncSession):
+    """
+    Scan for records where is_fnf_completed is True and is_fnf_email_sent is False.
+    Check if a document exists (locally or on SharePoint).
+    If a document exists, find the employee's email address from the employee_email_master
+    and automatically send the F&F details email, updating is_fnf_email_sent to True.
+    """
+    logger.info("Auto F&F Email Sender: Starting check...")
+    
+    # 1. Fetch eligible records
+    try:
+        stmt = select(NdcRecord).where(
+            NdcRecord.is_fnf_completed == True,
+            NdcRecord.is_fnf_email_sent == False
+        )
+        res = await db.execute(stmt)
+        records = res.scalars().all()
+    except Exception as e:
+        logger.error("Auto F&F Email Sender: Failed to query eligible records: %s", str(e))
+        return
+
+    if not records:
+        logger.info("Auto F&F Email Sender: No unsent completed F&F records found.")
+        return
+
+    logger.info("Auto F&F Email Sender: Found %d record(s) to process.", len(records))
+
+    # Import locally inside function to avoid circular imports
+    from app.models.employee_email_master import EmployeeEmailMaster
+
+    for record in records:
+        person_number = record.person_number
+        if not person_number:
+            continue
+
+        # 2. Check if a document exists
+        has_doc = False
+        
+        # Check local uploads folder first (fast fallback)
+        for ext in [".pdf", ".png", ".jpg", ".jpeg", ".docx", ".xlsx", ".xls"]:
+            possible_file = f"{person_number}{ext}"
+            possible_path = BASE_DIR / "uploads" / possible_file
+            if possible_path.exists():
+                has_doc = True
+                break
+
+        # Check SharePoint if local not found
+        if not has_doc:
+            sharepoint_service = SharePointService()
+            async with get_httpx_client() as client:
+                try:
+                    site_id = await sharepoint_service.get_site_id(client)
+                    drive_id, folder_path = await sharepoint_service.get_drive_details(client, site_id)
+                    files, _ = await sharepoint_service.get_person_folder_files(
+                        client, site_id, drive_id, folder_path, str(person_number)
+                    )
+                    if files:
+                        has_doc = True
+                except Exception as spe:
+                    logger.debug("Auto F&F Email Sender: SharePoint check failed for %s: %s", person_number, str(spe))
+
+        if not has_doc:
+            logger.info("Auto F&F Email Sender: No F&F document found yet for employee %s (%s). Skipping.", record.employee_name, person_number)
+            continue
+
+        # 3. Get employee email from master table
+        try:
+            stmt_email = select(EmployeeEmailMaster.email).where(EmployeeEmailMaster.person_number == person_number)
+            res_email = await db.execute(stmt_email)
+            emp_email = res_email.scalar_one_or_none()
+        except Exception as e:
+            logger.error("Auto F&F Email Sender: Failed to look up email for %s: %s", person_number, str(e))
+            continue
+
+        if not emp_email:
+            logger.warning("Auto F&F Email Sender: Employee %s (%s) has completed F&F, but no email is configured in Employee Email Master. Skipping.", record.employee_name, person_number)
+            continue
+
+        # 4. Send F&F details email
+        logger.info("Auto F&F Email Sender: Sending F&F email to %s for %s (%s)...", emp_email, record.employee_name, person_number)
+        try:
+            outcome = await send_fnf_email_service(record.id, emp_email, db)
+            if outcome.get("success"):
+                record.is_fnf_email_sent = True
+                await db.commit()
+                logger.info("Auto F&F Email Sender: Successfully sent email and updated record for employee %s (%s).", record.employee_name, person_number)
+            else:
+                logger.error("Auto F&F Email Sender: Failed to send F&F details email for employee %s (%s): %s", record.employee_name, person_number, outcome.get("message"))
+        except Exception as e:
+            logger.exception("Auto F&F Email Sender: Exception occurred while processing %s: %s", person_number, str(e))
+
+
+async def send_password_reset_email(to_email: str, reset_link: str) -> dict:
+    """Send a password reset email to the specified recipient."""
+    smtp_host = os.getenv("SMTP_HOST") or os.getenv("SMTP_SERVER", "smtp.gmail.com")
+    smtp_port = int(os.getenv("SMTP_PORT", "587"))
+    smtp_user = os.getenv("SMTP_USER") or os.getenv("SMTP_USERNAME", "")
+    smtp_password = os.getenv("SMTP_PASSWORD", "")
+    smtp_from = os.getenv("SMTP_FROM", smtp_user)
+
+    if not smtp_user:
+        msg = "SMTP user not configured"
+        logger.warning(msg)
+        return {"success": False, "message": msg}
+
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <style>
+        body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f6f9; margin: 0; padding: 20px; }}
+        .card {{ max-width: 540px; margin: 0 auto; background: #ffffff; border-radius: 8px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }}
+        .header {{ background-color: #003b70; color: #ffffff; padding: 24px; text-align: center; }}
+        .header h1 {{ margin: 0; font-size: 20px; font-weight: 600; letter-spacing: 0.5px; }}
+        .body {{ padding: 32px 24px; color: #334155; line-height: 1.6; font-size: 14px; }}
+        .btn-container {{ text-align: center; margin: 28px 0; }}
+        .btn {{ display: inline-block; background-color: #003b70; color: #ffffff !important; padding: 12px 28px; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }}
+        .footer {{ background-color: #f8fafc; padding: 16px 24px; border-top: 1px solid #f1f5f9; text-align: center; font-size: 12px; color: #64748b; }}
+        .warning {{ background-color: #fffbeb; border-left: 4px solid #f59e0b; padding: 12px; font-size: 13px; color: #92400e; border-radius: 0 4px 4px 0; margin-top: 20px; }}
+      </style>
+    </head>
+    <body>
+      <div class="card">
+        <div class="header">
+          <h1>Adani HR NDC Tracking</h1>
+        </div>
+        <div class="body">
+          <p>Hello,</p>
+          <p>We received a request to reset your password for your <strong>Adani HR NDC Tracking</strong> account.</p>
+          <p>Click the button below to set a new password:</p>
+          <div class="btn-container">
+            <a href="{reset_link}" class="btn" target="_blank">Reset Password</a>
+          </div>
+          <p>Or copy and paste this link into your browser:</p>
+          <p style="word-break: break-all; font-size: 12px; color: #003b70;"><a href="{reset_link}">{reset_link}</a></p>
+          <div class="warning">
+            ⏳ This password reset link is valid for <strong>30 minutes</strong>. If you did not request this, please ignore this email.
+          </div>
+        </div>
+        <div class="footer">
+          &copy; {datetime.now().year} Adani HR NDC Tracking Platform. All rights reserved.
+        </div>
+      </div>
+    </body>
+    </html>
+    """
+
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = "Password Reset Request – Adani HR NDC Tracking"
+    msg["From"] = smtp_from
+    msg["To"] = to_email
+    msg.attach(MIMEText(html_content, "html"))
+
+    try:
+        def _send():
+            with smtplib.SMTP(smtp_host, smtp_port, timeout=30) as server:
+                server.ehlo()
+                if "starttls" in server.esmtp_features:
+                    server.starttls()
+                    server.ehlo()
+                if smtp_password:
+                    server.login(smtp_user, smtp_password)
+                server.sendmail(smtp_from, [to_email], msg.as_string())
+
+        await asyncio.to_thread(_send)
+        logger.info("Password reset email sent successfully to %s", to_email)
+        return {"success": True, "message": "Email sent"}
+    except Exception as e:
+        logger.error("Failed to send password reset email to %s: %s", to_email, str(e))
+        return {"success": False, "message": str(e)}
+
 

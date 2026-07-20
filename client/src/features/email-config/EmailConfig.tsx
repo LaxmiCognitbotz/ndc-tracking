@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import axios from "../../lib/axios";
-import { Mail, Plus, Trash2, Pencil, Check, X, ChevronLeft, ChevronRight, Search } from "lucide-react";
+import { Mail, Plus, Trash2, Pencil, X, ChevronLeft, ChevronRight, Search } from "lucide-react";
 import { LoadingScreen } from "../../components/common/LoadingScreen";
 import { toast } from "sonner";
 import {
@@ -42,6 +42,7 @@ const DEPARTMENTS = [
   "Business Specific",
   "Final Abex",
   "Legatrix",
+  "F&F Team",
 ];
 
 const EMPTY_FORM = { name: "", email: "", department: "", role: "" };

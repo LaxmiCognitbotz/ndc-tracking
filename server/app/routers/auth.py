@@ -5,8 +5,9 @@ import asyncio
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Optional
+from pydantic import BaseModel
 
 import httpx
 from jose import jwt, JWTError
@@ -20,6 +21,7 @@ from app.models.ndc_auth_audit_log import NdcAuthAuditLog
 from config.database import get_db
 from app.auth.jwt_handler import create_access_token
 from app.auth.jwt_bearer import get_current_user
+from app.utils.password import hash_password, verify_password
 
 logger = logging.getLogger(__name__)
 
@@ -118,6 +120,161 @@ async def verify_azure_token(token: str, tenant_id: str, client_id: str) -> dict
         return payload
     except JWTError as e:
         raise HTTPException(status_code=401, detail=f"Token validation failed: {str(e)}")
+
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: str
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+
+
+@router.post("/login")
+async def login_post(payload: LoginRequest, db: AsyncSession = Depends(get_db)):
+    email = payload.email.strip().lower()
+    password = payload.password
+
+    # if not email.endswith("@adani.com"):
+    #     raise HTTPException(
+    #         status_code=status.HTTP_400_BAD_REQUEST,
+    #         detail="Only @adani.com email addresses are allowed."
+    #     )
+
+    stmt = select(NdcUserAccess).where(NdcUserAccess.email == email)
+    res = await db.execute(stmt)
+    user_access = res.scalar_one_or_none()
+
+    if not user_access:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid email or password."
+        )
+
+    if user_access.status == "pending":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your access request is pending approval."
+        )
+
+    if user_access.status == "rejected":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied. Your request has been rejected."
+        )
+
+    if not user_access.hashed_password or not verify_password(password, user_access.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid email or password."
+        )
+
+    # Generate token
+    session_token = create_access_token({
+        "sub": user_access.email,
+        "role": user_access.role,
+        "name": user_access.name or user_access.email.split('@')[0]
+    })
+
+    return {
+        "token": session_token,
+        "email": user_access.email,
+        "role": user_access.role,
+        "name": user_access.name or user_access.email.split('@')[0],
+        "status": user_access.status
+    }
+
+
+@router.post("/forgot-password")
+async def forgot_password(payload: ForgotPasswordRequest, request: Request, db: AsyncSession = Depends(get_db)):
+    email = payload.email.strip().lower()
+    # if not email.endswith("@adani.com"):
+    #     raise HTTPException(
+    #         status_code=status.HTTP_400_BAD_REQUEST,
+    #         detail="Only @adani.com email addresses are allowed."
+    #     )
+
+    stmt = select(NdcUserAccess).where(NdcUserAccess.email == email)
+    res = await db.execute(stmt)
+    user_access = res.scalar_one_or_none()
+
+    generic_msg = "If an account exists with this email address, password reset instructions have been sent."
+
+    if not user_access:
+        return {"message": generic_msg}
+
+    if user_access.status != "approved":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account is not approved for access."
+        )
+
+    # Generate token valid for 30 minutes
+    reset_token = secrets.token_urlsafe(32)
+    user_access.reset_token = reset_token
+    user_access.reset_token_expires_at = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(minutes=30)
+    db.add(user_access)
+    await db.commit()
+
+    # Build reset link
+    origin = request.headers.get("origin") or "http://localhost:5173"
+    reset_url = f"{origin}/ndc/reset-password?token={reset_token}"
+
+    try:
+        from app.services.email_service import send_password_reset_email
+        await send_password_reset_email(email, reset_url)
+    except Exception as e:
+        logger.error("Failed to trigger password reset email: %s", str(e))
+
+    return {"message": generic_msg}
+
+
+@router.get("/verify-reset-token/{token}")
+async def verify_reset_token(token: str, db: AsyncSession = Depends(get_db)):
+    stmt = select(NdcUserAccess).where(NdcUserAccess.reset_token == token)
+    res = await db.execute(stmt)
+    user_access = res.scalar_one_or_none()
+
+    if not user_access:
+        raise HTTPException(status_code=400, detail="Invalid or expired password reset link.")
+
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    if not user_access.reset_token_expires_at or user_access.reset_token_expires_at < now:
+        raise HTTPException(status_code=400, detail="This password reset link has expired. Please request a new one.")
+
+    return {"valid": True, "email": user_access.email}
+
+
+@router.post("/reset-password")
+async def reset_password(payload: ResetPasswordRequest, db: AsyncSession = Depends(get_db)):
+    stmt = select(NdcUserAccess).where(NdcUserAccess.reset_token == payload.token)
+    res = await db.execute(stmt)
+    user_access = res.scalar_one_or_none()
+
+    if not user_access:
+        raise HTTPException(status_code=400, detail="Invalid or expired password reset link.")
+
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    if not user_access.reset_token_expires_at or user_access.reset_token_expires_at < now:
+        raise HTTPException(status_code=400, detail="This password reset link has expired. Please request a new one.")
+
+    if not payload.new_password or len(payload.new_password.strip()) < 4:
+        raise HTTPException(status_code=400, detail="Password must be at least 4 characters long.")
+
+    user_access.hashed_password = hash_password(payload.new_password.strip())
+    user_access.reset_token = None
+    user_access.reset_token_expires_at = None
+
+    db.add(user_access)
+    await db.commit()
+
+    return {"message": "Password reset successfully. You can now log in with your new password."}
 
 
 @router.get("/config")
@@ -573,15 +730,6 @@ async def me(current_user: dict = Depends(get_current_user), db: AsyncSession = 
     if not email:
         raise HTTPException(status_code=401, detail="Invalid token session payload.")
 
-    sso_enabled = os.getenv("SSO_ENABLED", "False").lower() in ("true", "1", "yes", "on")
-    if not sso_enabled:
-        return {
-            "email": "dev@local.com",
-            "name": "Dev User",
-            "role": "super_admin",
-            "status": "approved"
-        }
-
     stmt = select(NdcUserAccess).where(NdcUserAccess.email == email)
     res = await db.execute(stmt)
     user_access = res.scalar_one_or_none()
@@ -616,10 +764,6 @@ async def require_super_admin(current_user: dict = Depends(get_current_user), db
     email = current_user.get("sub")
     if not email:
         raise HTTPException(status_code=401, detail="Unauthorized")
-
-    sso_enabled = os.getenv("SSO_ENABLED", "False").lower() in ("true", "1", "yes", "on")
-    if not sso_enabled:
-        return "super_admin"
 
     # Check hardcoded list first
     super_admin_env = os.getenv("SUPER_ADMIN_EMAIL", "")
@@ -698,6 +842,100 @@ async def revoke_access(email: str, db: AsyncSession = Depends(get_db)):
     await db.commit()
 
     return {"message": f"Access successfully revoked for {email_clean}."}
+
+
+class UserCreateRequest(BaseModel):
+    email: str
+    name: str
+    role: str
+    password: str
+
+
+class UserUpdateRequest(BaseModel):
+    name: Optional[str] = None
+    role: Optional[str] = None
+    status: Optional[str] = None
+    password: Optional[str] = None
+
+
+@admin_router.post("/users")
+async def create_user(payload: UserCreateRequest, db: AsyncSession = Depends(get_db)):
+    email = payload.email.strip().lower()
+    # if not email.endswith("@adani.com"):
+    #     raise HTTPException(status_code=400, detail="Only @adani.com email addresses are allowed.")
+
+    stmt = select(NdcUserAccess).where(NdcUserAccess.email == email)
+    res = await db.execute(stmt)
+    existing = res.scalar_one_or_none()
+    if existing:
+        raise HTTPException(status_code=400, detail="User with this email already exists.")
+
+    new_user = NdcUserAccess(
+        email=email,
+        name=payload.name,
+        role=payload.role,
+        status="approved",
+        hashed_password=hash_password(payload.password),
+        approved_at=datetime.now(timezone.utc).replace(tzinfo=None),
+        approved_by="super_admin"
+    )
+    db.add(new_user)
+    await db.commit()
+    return {"message": "User created successfully", "email": email}
+
+
+@admin_router.put("/users/{email}")
+async def update_user(email: str, payload: UserUpdateRequest, db: AsyncSession = Depends(get_db)):
+    email_clean = email.strip().lower()
+    stmt = select(NdcUserAccess).where(NdcUserAccess.email == email_clean)
+    res = await db.execute(stmt)
+    user_access = res.scalar_one_or_none()
+
+    if not user_access:
+        raise HTTPException(status_code=404, detail="User not found.")
+
+    super_admin_env = os.getenv("SUPER_ADMIN_EMAIL", "")
+    super_admins = [e.strip().lower() for e in super_admin_env.split(",") if e.strip()]
+
+    if email_clean in super_admins:
+        if payload.role and payload.role != "super_admin":
+            raise HTTPException(status_code=400, detail="Cannot downgrade root super admins configured via environment variables.")
+        if payload.status and payload.status != "approved":
+            raise HTTPException(status_code=400, detail="Cannot change status of root super admins configured via environment variables.")
+
+    if payload.name is not None:
+        user_access.name = payload.name
+    if payload.role is not None:
+        user_access.role = payload.role
+    if payload.status is not None:
+        user_access.status = payload.status
+    if payload.password is not None and payload.password.strip() != "":
+        user_access.hashed_password = hash_password(payload.password)
+
+    db.add(user_access)
+    await db.commit()
+    return {"message": "User updated successfully", "email": email_clean}
+
+
+@admin_router.delete("/users/{email}")
+async def delete_user(email: str, db: AsyncSession = Depends(get_db)):
+    email_clean = email.strip().lower()
+    super_admin_env = os.getenv("SUPER_ADMIN_EMAIL", "")
+    super_admins = [e.strip().lower() for e in super_admin_env.split(",") if e.strip()]
+
+    if email_clean in super_admins:
+        raise HTTPException(status_code=400, detail="Cannot delete root super admins configured via environment variables.")
+
+    stmt = select(NdcUserAccess).where(NdcUserAccess.email == email_clean)
+    res = await db.execute(stmt)
+    user_access = res.scalar_one_or_none()
+
+    if not user_access:
+        raise HTTPException(status_code=404, detail="User not found.")
+
+    await db.delete(user_access)
+    await db.commit()
+    return {"message": "User deleted successfully", "email": email_clean}
 
 
 @admin_router.get("/audit-logs")

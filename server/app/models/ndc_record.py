@@ -31,9 +31,13 @@ class NdcRecord(Base):
     is_fnf_completed = Column(Boolean, default=False, nullable=False, server_default="false")
     is_fnf_closed = Column(Boolean, default=False, nullable=False, server_default="false")
     is_fnf_revision = Column(Boolean, default=False, nullable=False, server_default="false")
+    is_fnf_email_sent = Column(Boolean, default=False, nullable=False, server_default="false")
+    is_fnf_revision_email_sent = Column(Boolean, default=False, nullable=False, server_default="false")
     fnf_completed_date = Column(Date, nullable=True)
     gcc_initiate_date = Column(Date, nullable=True)
     fnf_document_count = Column(Integer, default=0, nullable=False, server_default="0")
+    fnf_revision_start_date = Column(Date, nullable=True)
+    fnf_revision_completed_date = Column(Date, nullable=True)
 
     # Department Approval Dates
     rm_approval_date = Column(Date, nullable=True)

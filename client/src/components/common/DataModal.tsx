@@ -1,4 +1,4 @@
-import { X, Download, Mail } from "lucide-react";
+import { X, Download } from "lucide-react";
 import { NDCRecord } from "../../types";
 import { StatusBadge } from "./StatusBadge";
 import { exportToExcel } from "../../utils/excelExport";
@@ -11,7 +11,7 @@ interface DataModalProps {
   onSendReminder?: (type: string) => void;
 }
 
-export function DataModal({ isOpen, onClose, title, data, onSendReminder }: DataModalProps) {
+export function DataModal({ isOpen, onClose, title, data }: DataModalProps) {
   if (!isOpen) return null;
 
   const isOverdueModal = title === "Overdue Cases";
@@ -51,20 +51,20 @@ export function DataModal({ isOpen, onClose, title, data, onSendReminder }: Data
         <div className="p-6 border-b border-border flex items-center justify-between">
           <h2 className="text-2xl font-bold text-foreground">{title}</h2>
           <div className="flex items-center gap-2">
-            {onSendReminder && (title === "F&F Open" || title === "F&F Revision Required") && (
-              // <button
-              //   disabled={data.length === 0}
-              //   onClick={() => {
-              //     const type = title === "F&F Open" ? "fnf_open" : "fnf_revision";
-              //     onSendReminder(type);
-              //   }}
-              //   className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground text-sm rounded-[4px] hover:bg-primary/90 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-              // >
-              //   <Mail className="w-4 h-4" />
-              //   Send Reminder
-              // </button>
-              <></>
-            )}
+            {/* {onSendReminder && (title === "F&F Open" || title === "F&F Revision Required") && (
+              <button
+                disabled={data.length === 0}
+                onClick={() => {
+                  const type = title === "F&F Open" ? "fnf_open" : "fnf_revision";
+                  onSendReminder(type);
+                }}
+                className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground text-sm rounded-[4px] hover:bg-primary/90 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                <Mail className="w-4 h-4" />
+                Send Reminder
+              </button>
+             
+            )} */}
             <button
               disabled={data.length === 0}
               onClick={() => exportToExcel(data, title || "Data_Export")}

@@ -249,6 +249,8 @@ class SharePointSyncService:
                         record.is_fnf_completed = True
                         if not record.fnf_completed_date:
                             record.fnf_completed_date = today
+                        if record.is_fnf_revision or (record.fnf_revision_start_date and not record.fnf_revision_completed_date):
+                            record.fnf_revision_completed_date = today
                         record.is_fnf_revision = False
                         
                         # Also propagate dates
