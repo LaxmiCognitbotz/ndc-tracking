@@ -1,6 +1,6 @@
+import argparse
 import asyncio
 import sys
-import argparse
 from datetime import datetime
 from pathlib import Path
 
@@ -10,9 +10,9 @@ server_dir = utils_dir.parent.parent.resolve()
 if str(server_dir) not in sys.path:
     sys.path.insert(0, str(server_dir))
 
-from app.services.email_service import run_10am_job, run_tomorrow_alert_job
-
 import logging
+
+from app.modules.email.service import EmailService
 
 # Configure basic logging to stdout for CLI visibility
 logging.basicConfig(
@@ -35,15 +35,15 @@ async def main():
     print(f"Executing email script at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}...")
     
     if args.job == "10am":
-        await run_10am_job()
+        await EmailService.run_10am_job()
     elif args.job == "tomorrow":
-        await run_tomorrow_alert_job()
+        await EmailService.run_tomorrow_alert_job()
     else:
         # Run both sequentially
-        await run_10am_job()
+        await EmailService.run_10am_job()
         # Brief pause between tasks to avoid SMTP throttling
         await asyncio.sleep(5)
-        await run_tomorrow_alert_job()
+        await EmailService.run_tomorrow_alert_job()
 
 if __name__ == "__main__":
     asyncio.run(main())

@@ -41,6 +41,7 @@ export function FNFManagement() {
   const [reminderMailEmailTo, setReminderMailEmailTo] = useState("");
   const [reminderMailType, setReminderMailType] = useState<string>("fnf_open");
   const [sendingReminder, setSendingReminder] = useState(false);
+  const [sendingMail, setSendingMail] = useState(false);
 
   // Reset to first page on filter change
   useEffect(() => {
@@ -80,6 +81,8 @@ export function FNFManagement() {
   const kpiTotalPages = Math.max(1, Math.ceil(kpiModalData.data.length / itemsPerPage));
   const kpiStartIndex = (kpiCurrentPage - 1) * itemsPerPage;
   const kpiPaginatedData = kpiModalData.data.slice(kpiStartIndex, kpiStartIndex + itemsPerPage);
+
+
 
   const fnfStats = useMemo(() => {
     const total = eligibleRecords.length;
@@ -130,55 +133,13 @@ export function FNFManagement() {
     setSelectedRecord(null);
   };
 
-  const handleDocumentView = async (record: NDCRecord) => {
-    const toastId = toast.loading(`Downloading document for ${record.employeeName}...`);
-    try {
-      const response = await axios.get(`/api/ff/download/${record.personNumber}`, {
-        responseType: "blob",
-        skipGlobalToast: true,
-      } as any);
-
-      // Get filename from Content-Disposition header or fallback
-      const disposition = response.headers["content-disposition"] ? String(response.headers["content-disposition"]) : undefined;
-      let filename = `${record.personNumber}_document.pdf`;
-      if (disposition && disposition.indexOf("attachment") !== -1) {
-        const filenameRegex = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/;
-        const matches = filenameRegex.exec(disposition);
-        if (matches != null && matches[1]) {
-          filename = matches[1].replace(/['"]/g, "");
-        }
-      }
-
-      const contentType = response.headers["content-type"] ? String(response.headers["content-type"]) : undefined;
-      const blob = new Blob([response.data], { type: contentType });
-      const downloadUrl = window.URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = downloadUrl;
-      link.setAttribute("download", filename);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(downloadUrl);
-
-      toast.dismiss(toastId);
-      toast.success("Document downloaded successfully");
-    } catch (error: any) {
-      toast.dismiss(toastId);
-      console.error("Download error:", error);
-
-      let errorMessage = "Document not found.";
-      if (error.response?.data instanceof Blob) {
-        try {
-          const text = await error.response.data.text();
-          const parsed = JSON.parse(text);
-          errorMessage = parsed.message || errorMessage;
-        } catch (_) { }
-      } else if (error.response?.data?.message) {
-        errorMessage = error.response.data.message;
-      }
-
-      toast.error(errorMessage);
-    }
+  const handleDocumentView = (record: NDCRecord) => {
+    toast.success(`Downloading document for ${record.employeeName}...`);
+    
+    // Use native browser download. By updating location.href, the browser handles
+    // the redirect and downloads the file silently without opening a new tab.
+    const baseUrl = import.meta.env.BASE_URL?.replace(/\/$/, '') || '';
+    window.location.href = `${baseUrl}/api/ff/download/${record.personNumber}`;
   };
 
   const handleKPIClick = (type: "total" | "done" | "open" | "revision" | "closed" | "avgTAT") => {
@@ -272,9 +233,8 @@ export function FNFManagement() {
             <div
               key={type}
               onClick={isInteractive ? () => handleKPIClick(type) : undefined}
-              className={`bg-card rounded-[4px] p-5 border border-border h-[110px] flex flex-col justify-between ${
-                isInteractive ? "cursor-pointer hover:scale-105 transition-transform duration-200" : ""
-              }`}
+              className={`bg-card rounded-[4px] p-5 border border-border h-[110px] flex flex-col justify-between ${isInteractive ? "cursor-pointer hover:scale-105 transition-transform duration-200" : ""
+                }`}
             >
               <div className="flex items-start justify-between gap-2">
                 <span className="text-sm text-muted-foreground leading-tight">{label}</span>
@@ -388,8 +348,12 @@ export function FNFManagement() {
                     <div className="flex gap-2 items-center">
                       <button
                         onClick={() => handleDocumentView(record)}
-                        className="p-2 rounded-[4px] bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
-                        title="View document"
+                        disabled={record.fnfDocumentCount === 0}
+                        className={`p-2 rounded-[4px] transition-colors ${record.fnfDocumentCount === 0
+                            ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                            : 'bg-blue-50 text-blue-600 hover:bg-blue-100'
+                          }`}
+                        title={record.fnfDocumentCount === 0 ? "No document found" : "View document"}
                       >
                         <FileText className="w-4 h-4" />
                       </button>
@@ -633,12 +597,14 @@ export function FNFManagement() {
             </div>
             <div className="flex gap-3">
               <button
+                disabled={sendingMail}
                 onClick={() => {
                   if (!mailRecord) return;
                   if (!mailEmailTo) {
                     toast.error("Please enter an email address");
                     return;
                   }
+                  setSendingMail(true);
                   const toastId = toast.loading(`Sending F&F details email to ${mailEmailTo}...`);
                   axios.post("/api/v1/send-fnf-email", {
                     email: mailEmailTo,
@@ -655,12 +621,15 @@ export function FNFManagement() {
                       toast.dismiss(toastId);
                       const errMsg = err.response?.data?.detail || err.message || "Failed to send email";
                       toast.error(errMsg);
+                    })
+                    .finally(() => {
+                      setSendingMail(false);
                     });
                 }}
-                className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-[4px] hover:bg-primary/90 transition-colors flex items-center justify-center gap-2"
+                className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-[4px] hover:bg-primary/90 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Send className="w-4 h-4" />
-                Send
+                {sendingMail ? "Sending..." : "Send"}
               </button>
               <button
                 onClick={() => { setMailDialogOpen(false); setMailRecord(null); setMailEmailTo(""); }}

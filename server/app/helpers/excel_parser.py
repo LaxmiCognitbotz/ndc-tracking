@@ -1,14 +1,13 @@
 """Excel parser — reads .xlsb and .xlsx into a list of row dicts."""
 
 import email
-from email import policy
 import io
-from pathlib import Path
 import warnings
+from email import policy
+from pathlib import Path
 
 import pandas as pd
 import pyxlsb
-
 
 # The main sheet name from the source file
 EXPECTED_SHEET = "NDC Process Request Status(NDC )"

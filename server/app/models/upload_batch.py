@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Text, func
+from sqlalchemy import Column, DateTime, Integer, String, Text, func
 
 from app.models import Base
 

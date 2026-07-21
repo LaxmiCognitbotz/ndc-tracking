@@ -1,9 +1,10 @@
 import os
-import os
+
 from fastapi import Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from jose import jwt as jose_jwt
 
-from app.auth.jwt_handler import decode_jwt_token
+from app.auth.jwt_handler import decode_jwt_token, hashing_algorithm, secret_key
 
 
 class JWTBearer(HTTPBearer):
@@ -46,8 +47,6 @@ def get_current_user(token: str = Depends(jwt_scheme)) -> dict:
         raise HTTPException(status_code=403, detail="Invalid token or expired token.")
         
     try:
-        from jose import jwt as jose_jwt
-        from app.auth.jwt_handler import secret_key, hashing_algorithm
         payload = jose_jwt.decode(token, secret_key, algorithms=[hashing_algorithm])
         return payload
     except Exception:

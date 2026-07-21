@@ -1,6 +1,7 @@
-from sqlalchemy import Column, Integer, BigInteger, String, DateTime, func
+from sqlalchemy import BigInteger, Column, DateTime, Integer, String, func
 
 from app.models import Base
+
 
 class EmployeeEmailMaster(Base):
     __tablename__ = "employee_email_master"
