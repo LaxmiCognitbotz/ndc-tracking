@@ -334,7 +334,7 @@ class AuthService:
             raise HTTPException(status_code=400, detail="ID Token not returned by Azure AD.")
 
         # Verify ID Token
-        payload = await verify_azure_token(id_token, tenant_id, client_id)
+        payload = await AuthService.verify_azure_token(id_token, tenant_id, client_id)
 
         email = (payload.get("email") or payload.get("preferred_username") or payload.get("upn", "")).strip().lower()
         name = payload.get("name", email.split('@')[0])
@@ -343,7 +343,7 @@ class AuthService:
             raise HTTPException(status_code=400, detail="No email address found in Azure AD token claims.")
 
         # Check Super Admin
-        super_admins = _get_super_admins()
+        super_admins = AuthService._get_super_admins()
 
         # CASE A: Email is Super Admin
         if email in super_admins:
@@ -446,7 +446,7 @@ class AuthService:
             """
 
             for sa_email in super_admins:
-                await send_auth_email(to_email=sa_email, subject="NDC System — New Access Request", body_html=email_body)
+                await AuthService.send_auth_email(to_email=sa_email, subject="NDC System — New Access Request", body_html=email_body)
 
             # Log audit
             audit_log = NdcAuthAuditLog(
@@ -578,7 +578,7 @@ class AuthService:
         </body>
         </html>
         """
-        await send_auth_email(to_email=email, subject="NDC System — Access Granted", body_html=user_email_body)
+        await AuthService.send_auth_email(to_email=email, subject="NDC System — Access Granted", body_html=user_email_body)
 
         return {
             "found": True,
@@ -660,7 +660,7 @@ class AuthService:
         </body>
         </html>
         """
-        await send_auth_email(to_email=email, subject="NDC System — Access Denied", body_html=user_email_body)
+        await AuthService.send_auth_email(to_email=email, subject="NDC System — Access Denied", body_html=user_email_body)
 
         return {
             "found": True,
@@ -716,7 +716,7 @@ class AuthService:
 
         if not user_access:
             # Check if they are configured as Super Admin
-            super_admins = _get_super_admins()
+            super_admins = AuthService._get_super_admins()
             if email in super_admins:
                 return {
                     "email": email,
