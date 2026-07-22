@@ -25,6 +25,11 @@ export default defineConfig({
     react(),
     tailwindcss(),
   ],
+  build: {
+    // Always output to client/dist regardless of where the build command is run from
+    outDir: path.resolve(__dirname, 'dist'),
+    emptyOutDir: true,
+  },
   server: {
     port: 7002,
     open: '/ndc/ndc-reporting/overview',

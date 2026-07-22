@@ -15,46 +15,55 @@ logger = logging.getLogger(__name__)
 class StartupService:
     @staticmethod
     async def run_migrations(session: AsyncSession) -> None:
-        """Run schema migrations to ensure required columns exist."""
-        # Ensure hashed_password, reset_token, reset_token_expires_at exist on ndc_user_access
-        try:
-            await session.execute(text("ALTER TABLE ndc_user_access ADD COLUMN IF NOT EXISTS hashed_password VARCHAR(255)"))
-            await session.execute(text("ALTER TABLE ndc_user_access ADD COLUMN IF NOT EXISTS reset_token VARCHAR(255)"))
-            await session.execute(text("ALTER TABLE ndc_user_access ADD COLUMN IF NOT EXISTS reset_token_expires_at TIMESTAMP"))
-            await session.commit()
-        except Exception:
-            await session.rollback()
-            try:
-                await session.execute(text("ALTER TABLE ndc_user_access ADD COLUMN hashed_password VARCHAR(255)"))
-                await session.execute(text("ALTER TABLE ndc_user_access ADD COLUMN reset_token VARCHAR(255)"))
-                await session.execute(text("ALTER TABLE ndc_user_access ADD COLUMN reset_token_expires_at TIMESTAMP"))
-                await session.commit()
-            except Exception:
-                await session.rollback()
+        """Run idempotent schema migrations to add any columns missing from older DB instances.
 
-        # Ensure is_fnf_email_sent exists on ndc_records
-        try:
-            await session.execute(text("ALTER TABLE ndc_records ADD COLUMN IF NOT EXISTS is_fnf_email_sent BOOLEAN DEFAULT false"))
-            await session.commit()
-        except Exception:
-            await session.rollback()
-            try:
-                await session.execute(text("ALTER TABLE ndc_records ADD COLUMN is_fnf_email_sent BOOLEAN DEFAULT false"))
-                await session.commit()
-            except Exception:
-                await session.rollback()
+        Each column is migrated in isolation (its own try/except + commit/rollback) so that
+        a failure on one column does NOT abort the others or leave the session in a broken state.
+        This is the primary defence against UndefinedColumnError crashes on the Azure VM.
+        """
 
-        # Ensure is_fnf_revision_email_sent exists on ndc_records
-        try:
-            await session.execute(text("ALTER TABLE ndc_records ADD COLUMN IF NOT EXISTS is_fnf_revision_email_sent BOOLEAN DEFAULT false"))
-            await session.commit()
-        except Exception:
-            await session.rollback()
+        async def _add_column(ddl: str) -> None:
+            """Execute a single ADD COLUMN IF NOT EXISTS statement, swallowing errors gracefully."""
             try:
-                await session.execute(text("ALTER TABLE ndc_records ADD COLUMN is_fnf_revision_email_sent BOOLEAN DEFAULT false"))
+                await session.execute(text(ddl))
                 await session.commit()
-            except Exception:
+            except Exception as exc:
                 await session.rollback()
+                logger.warning("Migration skipped (column may already exist): %s", exc)
+
+        # ── ndc_user_access columns ──────────────────────────────────────────────
+        await _add_column("ALTER TABLE ndc_user_access ADD COLUMN IF NOT EXISTS hashed_password VARCHAR(255)")
+        await _add_column("ALTER TABLE ndc_user_access ADD COLUMN IF NOT EXISTS reset_token VARCHAR(255)")
+        await _add_column("ALTER TABLE ndc_user_access ADD COLUMN IF NOT EXISTS reset_token_expires_at TIMESTAMP")
+
+        # ── ndc_records: F&F tracking columns ───────────────────────────────────
+        await _add_column("ALTER TABLE ndc_records ADD COLUMN IF NOT EXISTS is_fnf_completed BOOLEAN NOT NULL DEFAULT false")
+        await _add_column("ALTER TABLE ndc_records ADD COLUMN IF NOT EXISTS is_fnf_closed BOOLEAN NOT NULL DEFAULT false")
+        await _add_column("ALTER TABLE ndc_records ADD COLUMN IF NOT EXISTS is_fnf_revision BOOLEAN NOT NULL DEFAULT false")
+        await _add_column("ALTER TABLE ndc_records ADD COLUMN IF NOT EXISTS is_fnf_email_sent BOOLEAN NOT NULL DEFAULT false")
+        await _add_column("ALTER TABLE ndc_records ADD COLUMN IF NOT EXISTS is_fnf_revision_email_sent BOOLEAN NOT NULL DEFAULT false")
+        await _add_column("ALTER TABLE ndc_records ADD COLUMN IF NOT EXISTS fnf_completed_date DATE")
+        await _add_column("ALTER TABLE ndc_records ADD COLUMN IF NOT EXISTS gcc_initiate_date DATE")
+        await _add_column("ALTER TABLE ndc_records ADD COLUMN IF NOT EXISTS fnf_document_count INTEGER NOT NULL DEFAULT 0")
+        await _add_column("ALTER TABLE ndc_records ADD COLUMN IF NOT EXISTS fnf_revision_start_date DATE")
+        await _add_column("ALTER TABLE ndc_records ADD COLUMN IF NOT EXISTS fnf_revision_completed_date DATE")
+
+        # ── ndc_records: department approval date columns ────────────────────────
+        await _add_column("ALTER TABLE ndc_records ADD COLUMN IF NOT EXISTS rm_approval_date DATE")
+        await _add_column("ALTER TABLE ndc_records ADD COLUMN IF NOT EXISTS it_approval_date DATE")
+        await _add_column("ALTER TABLE ndc_records ADD COLUMN IF NOT EXISTS abex_approval_date DATE")
+        await _add_column("ALTER TABLE ndc_records ADD COLUMN IF NOT EXISTS telecom_approval_date DATE")
+        await _add_column("ALTER TABLE ndc_records ADD COLUMN IF NOT EXISTS store_approval_date DATE")
+        await _add_column("ALTER TABLE ndc_records ADD COLUMN IF NOT EXISTS safety_approval_date DATE")
+        await _add_column("ALTER TABLE ndc_records ADD COLUMN IF NOT EXISTS administration_approval_date DATE")
+        await _add_column("ALTER TABLE ndc_records ADD COLUMN IF NOT EXISTS security_approval_date DATE")
+        await _add_column("ALTER TABLE ndc_records ADD COLUMN IF NOT EXISTS hr_approval_date DATE")
+        await _add_column("ALTER TABLE ndc_records ADD COLUMN IF NOT EXISTS gcc_hr_approval_date DATE")
+        await _add_column("ALTER TABLE ndc_records ADD COLUMN IF NOT EXISTS final_abex_approval_date DATE")
+        await _add_column("ALTER TABLE ndc_records ADD COLUMN IF NOT EXISTS business_specific_approval_date DATE")
+        await _add_column("ALTER TABLE ndc_records ADD COLUMN IF NOT EXISTS legatrix_approval_date DATE")
+
+        logger.info("Schema migrations completed.")
 
 
     @staticmethod
