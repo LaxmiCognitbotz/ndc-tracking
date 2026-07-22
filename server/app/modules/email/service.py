@@ -329,7 +329,7 @@ class EmailService:
         msg["To"] = email_to
         
         # CC recipient for F&F emails (manual and automated)
-        cc_recipient = os.getenv("FNF_EMAIL_CC") or os.getenv("EMAIL_CC", "laxminarayanapattanayak@gmail.com")
+        cc_recipient = os.getenv("FNF_EMAIL_CC") or os.getenv("EMAIL_CC", "")
         if cc_recipient:
             msg["Cc"] = cc_recipient
 
