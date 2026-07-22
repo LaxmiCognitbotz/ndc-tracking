@@ -6,7 +6,7 @@ from fastapi.responses import FileResponse
 router = APIRouter(tags=["Frontend SPA"])
 
 DIST_DIR = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..", "..", "..", "client", "dist")
+    os.path.join(os.path.dirname(__file__), "..", "..", "client", "dist")
 )
 os.makedirs(DIST_DIR, exist_ok=True)
 
