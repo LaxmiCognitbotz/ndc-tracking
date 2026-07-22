@@ -328,6 +328,19 @@ class EmailService:
         msg["From"] = smtp_from
         msg["To"] = email_to
         
+        # CC recipient for F&F emails (manual and automated)
+        cc_recipient = os.getenv("FNF_EMAIL_CC") or os.getenv("EMAIL_CC", "laxminarayanapattanayak@gmail.com")
+        if cc_recipient:
+            msg["Cc"] = cc_recipient
+
+        # Build list of envelope recipients for SMTP sendmail
+        recipients = [email_to]
+        if cc_recipient:
+            cc_list = [c.strip() for c in cc_recipient.split(",") if c.strip()]
+            for cc_addr in cc_list:
+                if cc_addr not in recipients:
+                    recipients.append(cc_addr)
+        
         # Attach F&F document(s) from SharePoint or local folder as fallback
         attached_from_sharepoint = False
         actual_document_count = 0
@@ -424,9 +437,9 @@ class EmailService:
                     server.ehlo()
                 if smtp_password:
                     server.login(smtp_user, smtp_password)
-                server.sendmail(smtp_from, [email_to], msg.as_string())
+                server.sendmail(smtp_from, recipients, msg.as_string())
 
-            logger.info("F&F details email sent to %s for %s", email_to, record.get('employee_name'))
+            logger.info("F&F details email sent to %s (CC: %s) for %s", email_to, cc_recipient, record.get('employee_name'))
             return {
                 "success": True,
                 "message": f"Email sent successfully to {email_to}.",
