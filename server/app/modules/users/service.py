@@ -21,6 +21,11 @@ from app.utils.password import hash_password, verify_password
 logger = logging.getLogger(__name__)
 
 
+def _get_super_admins() -> list[str]:
+    super_admin_env = os.getenv("SUPER_ADMIN_EMAIL", "")
+    return [e.strip().lower() for e in super_admin_env.split(",") if e.strip()]
+
+
 class UsersService:
     @staticmethod
     async def verify_super_admin(email: str, db: AsyncSession) -> str:

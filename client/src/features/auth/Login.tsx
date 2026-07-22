@@ -1,7 +1,7 @@
 import { useState, FormEvent } from "react";
 import { Navigate, useNavigate } from "react-router";
 import { useAuth } from "../../context/AuthContext";
-import { Eye, EyeOff, Loader2, ChevronDown, ChevronUp, Mail, Lock, CheckCircle2 } from "lucide-react";
+import { Eye, EyeOff, Loader2, Mail, Lock, CheckCircle2 } from "lucide-react";
 import imgLogo from "../../assets/images/image.png";
 import api from "../../lib/axios";
 import { toast } from "sonner";
@@ -20,7 +20,6 @@ export function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showDemoList, setShowDemoList] = useState(false);
 
   // Forgot password modal states
   const [isForgotOpen, setIsForgotOpen] = useState(false);
@@ -268,58 +267,8 @@ export function Login() {
             </button>
           </form>
 
-          {/* Demo Accounts Panel */}
-          <div className="pt-4 border-t border-slate-100">
-            <button
-              type="button"
-              onClick={() => setShowDemoList(!showDemoList)}
-              className="w-full flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-slate-400 hover:text-slate-600 transition-colors focus:outline-none cursor-pointer"
-            >
-              <span>Demo Accounts</span>
-              {showDemoList ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-            </button>
-
-            {showDemoList && (
-              <div className="mt-2.5 space-y-2">
-                <div
-                  onClick={() => {
-                    setEmail("sahil.singh1@adani.com");
-                    setPassword("Adani@123");
-                  }}
-                  className="flex flex-col gap-0.5 text-[11px] text-slate-500 hover:bg-slate-50 p-2.5 rounded-lg cursor-pointer transition-all border border-slate-100 bg-white hover:border-[#003b70]/20"
-                >
-                  <div className="flex items-center justify-between font-bold text-[#003b70]">
-                    <span>Super Admin</span>
-                    <span className="text-[8px] uppercase tracking-wider bg-teal-500/10 text-teal-700 px-1.5 py-0.5 rounded border border-teal-500/10">Fill</span>
-                  </div>
-                  <div className="flex flex-col text-slate-400 mt-0.5 font-medium">
-                    <span>Email: sahil.singh1@adani.com</span>
-                    <span>Password: Adani@123</span>
-                  </div>
-                </div>
-
-                <div
-                  onClick={() => {
-                    setEmail("demo.admin@adani.com");
-                    setPassword("Adani@123");
-                  }}
-                  className="flex flex-col gap-0.5 text-[11px] text-slate-500 hover:bg-slate-50 p-2.5 rounded-lg cursor-pointer transition-all border border-slate-100 bg-white hover:border-[#003b70]/20"
-                >
-                  <div className="flex items-center justify-between font-bold text-[#1e5a8e]">
-                    <span>Admin</span>
-                    <span className="text-[8px] uppercase tracking-wider bg-blue-500/10 text-blue-700 px-1.5 py-0.5 rounded border border-blue-500/10">Fill</span>
-                  </div>
-                  <div className="flex flex-col text-slate-400 mt-0.5 font-medium">
-                    <span>Email: demo.admin@adani.com</span>
-                    <span>Password: Adani@123</span>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-
           {/* Footer info */}
-          <div className="pt-2 text-left text-[10px] text-slate-400 font-semibold tracking-wide uppercase">
+          <div className="pt-4 border-t border-slate-100 text-left text-[10px] text-slate-400 font-semibold tracking-wide uppercase">
             Adani Group HR Portal • exit clearance tracking
           </div>
         </div>
