@@ -2,7 +2,7 @@ import asyncio
 
 from dotenv import load_dotenv
 
-from app.models import Base
+from config.database import Base
 from app.models.employee_email_master import EmployeeEmailMaster
 from app.models.ndc_approval import NdcApproval
 from app.models.ndc_auth_audit_log import NdcAuthAuditLog
