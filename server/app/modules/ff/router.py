@@ -2,9 +2,9 @@ import logging
 
 from fastapi import APIRouter, status
 from fastapi.exceptions import HTTPException
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import RedirectResponse, StreamingResponse
 
-from app.services.sharepoint_service import SharePointService, get_httpx_client
+from app.helpers.ff.sharepoint_service import SharePointService, get_httpx_client
 
 logger = logging.getLogger(__name__)
 
@@ -28,15 +28,15 @@ async def download_ff_document(person_number: str):
             result = await sharepoint_service.download_employee_documents(client, person_number)
             if not result:
                 logger.warning(f"No files found for person: {person_number} in SharePoint.")
-                return JSONResponse(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    content={
-                        "success": False,
-                        "message": "Document not found."
-                    }
-                )
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found.")
                 
-            stream, filename, mime_type = result
+            if result["type"] == "redirect":
+                return RedirectResponse(url=result["url"])
+                
+            stream = result["stream"]
+            filename = result["filename"]
+            mime_type = result["mime_type"]
+            
             logger.info(f"Successfully located file '{filename}' for person {person_number}. Initiating stream.")
             
             headers = {
@@ -44,15 +44,8 @@ async def download_ff_document(person_number: str):
                 "Access-Control-Expose-Headers": "Content-Disposition"  # Allows Axios to access the filename header
             }
             
-            return StreamingResponse(
-                stream,
-                media_type=mime_type,
-                headers=headers
-            )
+            return StreamingResponse(stream, media_type=mime_type, headers=headers)
             
         except Exception as e:
             logger.exception(f"SharePoint download failed for person {person_number} due to exception: {str(e)}")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"SharePoint server error: {str(e)}"
-            )
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"SharePoint server error: {str(e)}")

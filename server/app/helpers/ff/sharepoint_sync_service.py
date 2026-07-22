@@ -2,20 +2,20 @@ import datetime
 import io
 import logging
 import os
+from datetime import date
 from pathlib import Path
 
 import httpx
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from datetime import date
+from app.helpers.ff.sharepoint_service import SharePointService, get_httpx_client
+from app.helpers.upload.ingest_service import IngestService
 from app.models.ndc_record import NdcRecord
 from app.models.upload_batch import UploadBatch
-from app.services.common_service import _propagate_department_dates
-from app.services.ingest_service import ingest_excel_file
-from app.services.sharepoint_service import SharePointService, get_httpx_client
+from app.modules.common.service import CommonService
 
 logger = logging.getLogger(__name__)
 
@@ -134,7 +134,7 @@ class SharePointSyncService:
 
                     # Run database ingestion
                     try:
-                        ingest_result = await ingest_excel_file(
+                        ingest_result = await IngestService.ingest_excel_file(
                             file_path=local_file_path,
                             file_name=file_name,
                             uploaded_by="sharepoint_sync",
@@ -254,7 +254,7 @@ class SharePointSyncService:
                         record.is_fnf_revision = False
                         
                         # Also propagate dates
-                        await _propagate_department_dates(record.id, today, db)
+                        await CommonService._propagate_department_dates(record.id, today, db)
                         completed_count += 1
                 
                 # Update non-matching records to False
@@ -443,5 +443,98 @@ class SharePointSyncService:
             logger.exception(err_msg)
             results["status"] = "failed"
             results["errors"].append(err_msg)
+
+        return results
+
+    async def sync_fnf_document_presence(self, db: AsyncSession) -> dict:
+        """
+        Scans the SharePoint F&F_Documents folder for employee subfolders or files.
+        Updates the 'fnf_document_count' field in the database.
+        """
+        results = {
+            "status": "success",
+            "folders_found": 0,
+            "records_updated": 0,
+            "errors": []
+        }
+
+        async with get_httpx_client(timeout=120.0) as client:
+            try:
+                site_id = await self.sharepoint.get_site_id(client)
+                drive_id, base_folder_path = await self.sharepoint.get_drive_details(client, site_id)
+                token = await self.sharepoint.get_access_token()
+                headers = {"Authorization": f"Bearer {token}"}
+
+                # Construct F&F_Documents path
+                if base_folder_path:
+                    fnf_path = f"{base_folder_path}/F&F_Documents"
+                else:
+                    fnf_path = "F&F_Documents"
+
+                clean_path = "/".join([p for p in fnf_path.split("/") if p])
+                encoded_path = self.sharepoint._encode_path_segments(clean_path)
+
+                person_numbers = set()
+                url = f"https://graph.microsoft.com/v1.0/sites/{site_id}/drives/{drive_id}/root:/{encoded_path}:/children"
+
+                while url:
+                    logger.info(f"Sync F&F Documents: Querying {url}")
+                    response = await client.get(url, headers=headers)
+                    if response.status_code == 200:
+                        data = response.json()
+                        children = data.get("value", [])
+                        for item in children:
+                            name = item.get("name", "")
+                            # If it's a file like 30133866.pdf, strip extension
+                            if "file" in item:
+                                pn = name.rsplit(".", 1)[0]
+                            else:
+                                pn = name
+                            try:
+                                person_numbers.add(int(pn))
+                            except ValueError:
+                                logger.warning(f"Sync F&F Documents: Ignoring invalid folder/file name '{name}'")
+
+                        url = data.get("@odata.nextLink")
+                    elif response.status_code == 404:
+                        logger.warning(f"Sync F&F Documents: Directory '{clean_path}' not found in SharePoint.")
+                        break
+                    else:
+                        err_msg = f"Sync F&F Documents API error {response.status_code}: {response.text}"
+                        logger.error(err_msg)
+                        results["status"] = "failed"
+                        results["errors"].append(err_msg)
+                        break
+
+                results["folders_found"] = len(person_numbers)
+                logger.info(f"Sync F&F Documents: Found {len(person_numbers)} unique person numbers.")
+
+                # Update the database
+                if person_numbers:
+                    # Set fnf_document_count = 1 for found person numbers
+                    update_stmt_1 = (
+                        update(NdcRecord)
+                        .where(NdcRecord.person_number.in_(person_numbers))
+                        .values(fnf_document_count=1)
+                    )
+                    # Set fnf_document_count = 0 for all others
+                    update_stmt_0 = (
+                        update(NdcRecord)
+                        .where(NdcRecord.person_number.not_in(person_numbers))
+                        .values(fnf_document_count=0)
+                    )
+                    
+                    res_1 = await db.execute(update_stmt_1)
+                    res_0 = await db.execute(update_stmt_0)
+                    await db.commit()
+                    
+                    results["records_updated"] = res_1.rowcount + res_0.rowcount
+                    logger.info(f"Sync F&F Documents: Updated {res_1.rowcount} records to 1, and {res_0.rowcount} records to 0.")
+
+            except Exception as e:
+                err_msg = f"Sync F&F Documents: Unexpected error — {str(e)}"
+                logger.exception(err_msg)
+                results["status"] = "failed"
+                results["errors"].append(err_msg)
 
         return results

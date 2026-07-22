@@ -1,5 +1,13 @@
 from sqlalchemy import (
-    Column, Integer, BigInteger, String, Date, DateTime, Boolean, CheckConstraint, Index,
+    BigInteger,
+    Boolean,
+    CheckConstraint,
+    Column,
+    Date,
+    DateTime,
+    Index,
+    Integer,
+    String,
     func,
 )
 

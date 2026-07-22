@@ -2,9 +2,9 @@ import asyncio
 import io
 import logging
 import os
-from typing import Any, AsyncGenerator, Dict, List, Optional, Tuple
 import urllib.parse
 import zipfile
+from typing import Any, AsyncGenerator, Dict, List, Optional, Tuple
 
 import httpx
 import msal
@@ -274,32 +274,37 @@ class SharePointService:
             candidates.append(f"F&F_Documents/{person_number}")
             candidates.append(person_number)
 
-        for candidate_path in candidates:
-            # Clean path from redundant slashes
+        async def fetch_candidate(candidate_path):
             clean_path = "/".join([p for p in candidate_path.split("/") if p])
             encoded_path = self._encode_path_segments(clean_path)
-            
-            # GET /sites/{site-id}/drives/{drive-id}/root:/{folder_path}:/children
             url = f"https://graph.microsoft.com/v1.0/sites/{site_id}/drives/{drive_id}/root:/{encoded_path}:/children"
             logger.info(f"Querying SharePoint path: {clean_path} (Encoded: {encoded_path})")
-            
             response = await client.get(url, headers=headers)
+            return response, clean_path
+
+        tasks = [fetch_candidate(cp) for cp in candidates]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        for result in results:
+            if isinstance(result, Exception):
+                continue
+            response, clean_path = result
             if response.status_code == 200:
                 children = response.json().get("value", [])
-                # Only keep files, exclude folders/directories
                 files = [item for item in children if "file" in item]
                 logger.info(f"Folder '{clean_path}' found with {len(files)} files.")
                 return files, clean_path
-            elif response.status_code == 404:
-                logger.debug(f"Path '{clean_path}' not found (404). Trying next candidate if available.")
-                continue
-            else:
-                logger.error(f"Error querying path '{clean_path}': {response.status_code} - {response.text}")
-                if response.status_code in (401, 403):
-                    raise Exception(f"SharePoint permissions or auth error: {response.text}")
+
+        # If none matched, check if there was an auth error
+        for result in results:
+            if isinstance(result, tuple):
+                response, clean_path = result
+                if response.status_code not in (200, 404):
+                    logger.error(f"Error querying path '{clean_path}': {response.status_code} - {response.text}")
+                    if response.status_code in (401, 403):
+                        raise Exception(f"SharePoint permissions or auth error: {response.text}")
                     
         # If all candidates returned 404
-        logger.warning(f"No SharePoint folder found for person number {person_number} in any checked paths.")
         return [], ""
 
     async def get_download_stream(
@@ -342,23 +347,31 @@ class SharePointService:
         async def zip_stream_generator():
             
             zip_buffer = io.BytesIO()
+            async def fetch_file(fetch_client, file_item):
+                name = file_item.get("name", "document.pdf")
+                download_url = file_item.get("@microsoft.graph.downloadUrl")
+                if download_url:
+                    try:
+                        logger.info(f"Fetching '{name}' for zipping...")
+                        res = await fetch_client.get(download_url)
+                        if res.status_code == 200:
+                            return name, res.content
+                        else:
+                            logger.error(f"Failed to fetch '{name}' for zipping (status: {res.status_code})")
+                    except Exception as e:
+                        logger.error(f"Error fetching '{name}' for zipping: {str(e)}")
+                return None, None
+
             # Compile the zip archive in-memory
             with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
                 async with get_httpx_client() as fetch_client:
-                    for file_item in files:
-                        name = file_item.get("name", "document.pdf")
-                        download_url = file_item.get("@microsoft.graph.downloadUrl")
-                        if download_url:
-                            try:
-                                logger.info(f"Fetching '{name}' for zipping...")
-                                res = await fetch_client.get(download_url)
-                                if res.status_code == 200:
-                                    zip_file.writestr(name, res.content)
-                                    logger.info(f"Successfully added '{name}' to ZIP archive.")
-                                else:
-                                    logger.error(f"Failed to fetch '{name}' for zipping (status: {res.status_code})")
-                            except Exception as e:
-                                logger.error(f"Error fetching '{name}' for zipping: {str(e)}")
+                    tasks = [fetch_file(fetch_client, item) for item in files]
+                    fetched_results = await asyncio.gather(*tasks)
+                    
+                    for name, content in fetched_results:
+                        if name and content:
+                            zip_file.writestr(name, content)
+                            logger.info(f"Successfully added '{name}' to ZIP archive.")
                                 
             zip_buffer.seek(0)
             # Yield chunk-by-chunk
@@ -372,9 +385,12 @@ class SharePointService:
 
     async def download_employee_documents(
         self, client: httpx.AsyncClient, person_number: str
-    ) -> Tuple[AsyncGenerator[bytes, None], str, str] | None:
+    ) -> Dict[str, Any] | None:
         """
-        Resolves site, drive, lists employee folder files, and returns the stream, filename, and mime_type.
+        Resolves site, drive, lists employee folder files.
+        Returns a dict indicating how to serve the file:
+        - {"type": "redirect", "url": download_url} for single files.
+        - {"type": "stream", "stream": async_generator, "filename": str, "mime_type": str} for multiple files.
         Returns None if no files are found.
         """
         # 1. Resolve site ID
@@ -391,10 +407,18 @@ class SharePointService:
         if not files:
             return None
 
-        # 4. Stream either the single file or compile all into a zip archive
+        # 4. For a single file, return direct download URL bypass. For multiple, zip them.
         if len(files) == 1:
             selected_file = files[0]
-            return await self.get_download_stream(selected_file)
+            download_url = selected_file.get("@microsoft.graph.downloadUrl")
+            if download_url:
+                logger.info(f"Single file found for {person_number}. Bypassing backend streaming with direct URL.")
+                return {"type": "redirect", "url": download_url}
+            else:
+                # Fallback if downloadUrl is missing for some reason
+                stream, filename, mime = await self.get_download_stream(selected_file)
+                return {"type": "stream", "stream": stream, "filename": filename, "mime_type": mime}
         else:
-            return await self.get_zipped_download_stream(files, person_number)
+            stream, filename, mime = await self.get_zipped_download_stream(files, person_number)
+            return {"type": "stream", "stream": stream, "filename": filename, "mime_type": mime}
 
