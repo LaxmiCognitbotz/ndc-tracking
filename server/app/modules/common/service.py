@@ -4,6 +4,7 @@ from typing import List, Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import HTTPException
 
 from app.dto.common import CommonNDCRecord, FnfUpdateRequest
 from app.models.ndc_approval import NdcApproval
@@ -36,8 +37,8 @@ class CommonService:
             approvals_res = await db.execute(select(NdcApproval))
             all_approvals = approvals_res.scalars().all()
         except Exception as e:
-            logger.exception("Database query failed while fetching common records")
-            raise e
+            logger.error(f"Error in fetch_common_records: {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail="An internal server error occurred.")
 
         # Group approvals by record id for fast lookup
         approvals_by_record = {}
@@ -192,14 +193,21 @@ class CommonService:
     @staticmethod
     def _derive_fnf_status(record: NdcRecord) -> str:
         """Derive a string F&F status from boolean fields for backward compatibility."""
-        if record.is_fnf_completed:
-            return "Done"
-        if record.is_fnf_revision:
-            return "Revision Required"
-        # Eligible = NDC Completed AND GCC HR Completed (check ndc_stage only; GCC status checked separately)
-        if record.ndc_stage == "NDC Completed":
-            return "Open"
-        return ""
+        try:
+            if record.is_fnf_completed:
+                return "Done"
+            if record.is_fnf_revision:
+                return "Revision Required"
+            # Eligible = NDC Completed AND GCC HR Completed (check ndc_stage only; GCC status checked separately)
+            if record.ndc_stage == "NDC Completed":
+                return "Open"
+            return ""
+        except HTTPException:
+            raise
+        except Exception as e:
+            import logging; logging.error(f'Error in _derive_fnf_status: {e}', exc_info=True)
+            import fastapi
+            raise fastapi.HTTPException(status_code=500, detail='An internal server error occurred.')
 
 
     @staticmethod
@@ -266,8 +274,8 @@ class CommonService:
             await db.commit()
             return record
         except Exception as e:
-            logger.exception(f"Failed to update F&F status for record {record_id}")
-            raise e
+            logger.error(f"Error in update_fnf_status: {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail="An internal server error occurred.")
 
 
     @staticmethod
@@ -308,6 +316,6 @@ class CommonService:
                         if col_name and getattr(record, col_name) is None:
                             setattr(record, col_name, fnf_completed_date)
         except Exception as e:
-            logger.exception(f"Failed to propagate department dates for record {record_id}")
-            raise e
+            logger.error(f"Error in _propagate_department_dates: {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail="An internal server error occurred.")
 

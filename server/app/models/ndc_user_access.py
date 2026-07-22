@@ -1,6 +1,6 @@
 from sqlalchemy import Column, DateTime, Index, Integer, String, func
 
-from app.models import Base
+from config.database import Base
 
 
 class NdcUserAccess(Base):

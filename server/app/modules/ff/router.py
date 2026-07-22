@@ -21,31 +21,38 @@ async def download_ff_document(person_number: str):
     If no file exists, returns 404.
     If multiple files exist, streams a zip archive.
     """
-    logger.info(f"Received SharePoint document download request for person: {person_number}")
+    try:
+        logger.info(f"Received SharePoint document download request for person: {person_number}")
     
-    async with get_httpx_client() as client:
-        try:
-            result = await sharepoint_service.download_employee_documents(client, person_number)
-            if not result:
-                logger.warning(f"No files found for person: {person_number} in SharePoint.")
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found.")
+        async with get_httpx_client() as client:
+            try:
+                result = await sharepoint_service.download_employee_documents(client, person_number)
+                if not result:
+                    logger.warning(f"No files found for person: {person_number} in SharePoint.")
+                    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found.")
                 
-            if result["type"] == "redirect":
-                return RedirectResponse(url=result["url"])
+                if result["type"] == "redirect":
+                    return RedirectResponse(url=result["url"])
                 
-            stream = result["stream"]
-            filename = result["filename"]
-            mime_type = result["mime_type"]
+                stream = result["stream"]
+                filename = result["filename"]
+                mime_type = result["mime_type"]
             
-            logger.info(f"Successfully located file '{filename}' for person {person_number}. Initiating stream.")
+                logger.info(f"Successfully located file '{filename}' for person {person_number}. Initiating stream.")
             
-            headers = {
-                "Content-Disposition": f'attachment; filename="{filename}"',
-                "Access-Control-Expose-Headers": "Content-Disposition"  # Allows Axios to access the filename header
-            }
+                headers = {
+                    "Content-Disposition": f'attachment; filename="{filename}"',
+                    "Access-Control-Expose-Headers": "Content-Disposition"  # Allows Axios to access the filename header
+                }
             
-            return StreamingResponse(stream, media_type=mime_type, headers=headers)
+                return StreamingResponse(stream, media_type=mime_type, headers=headers)
             
-        except Exception as e:
-            logger.exception(f"SharePoint download failed for person {person_number} due to exception: {str(e)}")
-            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"SharePoint server error: {str(e)}")
+            except Exception as e:
+                logger.exception(f"SharePoint download failed for person {person_number} due to exception: {str(e)}")
+                raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"SharePoint server error: {str(e)}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        import logging; logging.error(f'Error in download_ff_document: {e}', exc_info=True)
+        import fastapi
+        raise fastapi.HTTPException(status_code=500, detail='An internal server error occurred.')

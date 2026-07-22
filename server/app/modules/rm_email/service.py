@@ -119,117 +119,124 @@ class RMEmailService:
     @staticmethod
     async def import_rm_emails_excel(file: UploadFile, db: AsyncSession) -> Dict[str, Any]:
         """Import RM configurations from an uploaded Excel file."""
-        if not file.filename:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No file provided")
-
-        ext = file.filename.split(".")[-1].lower()
-        if ext not in ("xlsx", "xls"):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Unsupported file type: .{ext}. Only .xlsx and .xls are allowed."
-            )
-
         try:
-            content = await file.read()
-            df = pd.read_excel(io.BytesIO(content))
-        except Exception as e:
-            logger.exception("Failed to parse imported Excel file")
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Failed to parse Excel file: {str(e)}"
-            )
+            if not file.filename:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No file provided")
 
-        # Clean and check columns
-        df.columns = [str(col).strip() for col in df.columns]
-
-        col_mapping = {}
-        for col in df.columns:
-            col_lower = col.lower()
-            if col_lower == "rm name":
-                col_mapping["rm_name"] = col
-            elif col_lower == "email":
-                col_mapping["email"] = col
-
-        if "rm_name" not in col_mapping or "email" not in col_mapping:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Excel file must contain 'RM Name' and 'Email' columns."
-            )
-
-        inserted = 0
-        skipped = 0
-        failed = 0
-        errors = []
-
-        try:
-            # Get all existing emails for duplicate checking
-            res = await db.execute(select(RmEmailConfiguration.email))
-            existing_emails = {e.lower() for e in res.scalars().all()}
-            
-            seen_emails = set()
-
-            for idx, row in df.iterrows():
-                row_num = idx + 2  # Row index starts at 2 (Row 1 is header)
-                
-                raw_rm_name = row[col_mapping["rm_name"]]
-                raw_email = row[col_mapping["email"]]
-
-                # Skip completely empty rows
-                if pd.isna(raw_rm_name) and pd.isna(raw_email):
-                    continue
-
-                rm_name_str = str(raw_rm_name).strip() if not pd.isna(raw_rm_name) else ""
-                email_str = str(raw_email).strip().lower() if not pd.isna(raw_email) else ""
-
-                if not rm_name_str and not email_str:
-                    continue
-
-                # Validations
-                if not rm_name_str:
-                    errors.append({"row": row_num, "message": "RM Name is required"})
-                    failed += 1
-                    continue
-
-                if not email_str:
-                    errors.append({"row": row_num, "message": "Email is required"})
-                    failed += 1
-                    continue
-
-                email_regex = r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
-                if not re.match(email_regex, email_str):
-                    errors.append({"row": row_num, "message": "Invalid email format"})
-                    failed += 1
-                    continue
-
-                # Duplicate check
-                if email_str in existing_emails or email_str in seen_emails:
-                    skipped += 1
-                    continue
-
-                seen_emails.add(email_str)
-                new_config = RmEmailConfiguration(
-                    rm_name=rm_name_str,
-                    email=email_str
+            ext = file.filename.split(".")[-1].lower()
+            if ext not in ("xlsx", "xls"):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Unsupported file type: .{ext}. Only .xlsx and .xls are allowed."
                 )
-                db.add(new_config)
-                inserted += 1
 
-            if inserted > 0:
-                await db.commit()
+            try:
+                content = await file.read()
+                df = pd.read_excel(io.BytesIO(content))
+            except Exception as e:
+                logger.exception("Failed to parse imported Excel file")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Failed to parse Excel file: {str(e)}"
+                )
 
-            return {
-                "success": True,
-                "inserted": inserted,
-                "skipped": skipped,
-                "failed": failed,
-                "errors": errors
-            }
+            # Clean and check columns
+            df.columns = [str(col).strip() for col in df.columns]
+
+            col_mapping = {}
+            for col in df.columns:
+                col_lower = col.lower()
+                if col_lower == "rm name":
+                    col_mapping["rm_name"] = col
+                elif col_lower == "email":
+                    col_mapping["email"] = col
+
+            if "rm_name" not in col_mapping or "email" not in col_mapping:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Excel file must contain 'RM Name' and 'Email' columns."
+                )
+
+            inserted = 0
+            skipped = 0
+            failed = 0
+            errors = []
+
+            try:
+                # Get all existing emails for duplicate checking
+                res = await db.execute(select(RmEmailConfiguration.email))
+                existing_emails = {e.lower() for e in res.scalars().all()}
+            
+                seen_emails = set()
+
+                for idx, row in df.iterrows():
+                    row_num = idx + 2  # Row index starts at 2 (Row 1 is header)
+                
+                    raw_rm_name = row[col_mapping["rm_name"]]
+                    raw_email = row[col_mapping["email"]]
+
+                    # Skip completely empty rows
+                    if pd.isna(raw_rm_name) and pd.isna(raw_email):
+                        continue
+
+                    rm_name_str = str(raw_rm_name).strip() if not pd.isna(raw_rm_name) else ""
+                    email_str = str(raw_email).strip().lower() if not pd.isna(raw_email) else ""
+
+                    if not rm_name_str and not email_str:
+                        continue
+
+                    # Validations
+                    if not rm_name_str:
+                        errors.append({"row": row_num, "message": "RM Name is required"})
+                        failed += 1
+                        continue
+
+                    if not email_str:
+                        errors.append({"row": row_num, "message": "Email is required"})
+                        failed += 1
+                        continue
+
+                    email_regex = r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
+                    if not re.match(email_regex, email_str):
+                        errors.append({"row": row_num, "message": "Invalid email format"})
+                        failed += 1
+                        continue
+
+                    # Duplicate check
+                    if email_str in existing_emails or email_str in seen_emails:
+                        skipped += 1
+                        continue
+
+                    seen_emails.add(email_str)
+                    new_config = RmEmailConfiguration(
+                        rm_name=rm_name_str,
+                        email=email_str
+                    )
+                    db.add(new_config)
+                    inserted += 1
+
+                if inserted > 0:
+                    await db.commit()
+
+                return {
+                    "success": True,
+                    "inserted": inserted,
+                    "skipped": skipped,
+                    "failed": failed,
+                    "errors": errors
+                }
+            except Exception as e:
+                logger.exception("Failed to import configuration data into database")
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Database import failed: {str(e)}"
+                )
+        except HTTPException:
+            raise
         except Exception as e:
-            logger.exception("Failed to import configuration data into database")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Database import failed: {str(e)}"
-            )
+            import logging; logging.error(f'Error in import_rm_emails_excel: {e}', exc_info=True)
+            import fastapi
+            raise fastapi.HTTPException(status_code=500, detail='An internal server error occurred.')
 
 
     @staticmethod

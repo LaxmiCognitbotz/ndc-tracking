@@ -1,6 +1,6 @@
 from sqlalchemy import BigInteger, Column, DateTime, Integer, String, func
 
-from app.models import Base
+from config.database import Base
 
 
 class EmployeeEmailMaster(Base):

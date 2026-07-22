@@ -11,7 +11,7 @@ from sqlalchemy import (
     func,
 )
 
-from app.models import Base
+from config.database import Base
 
 
 class NdcRecord(Base):
@@ -35,6 +35,7 @@ class NdcRecord(Base):
     created_by = Column(String(200))
     source_file = Column(String(500))
     batch_id = Column(Integer)
+    
     # F&F tracking columns
     is_fnf_completed = Column(Boolean, default=False, nullable=False, server_default="false")
     is_fnf_closed = Column(Boolean, default=False, nullable=False, server_default="false")

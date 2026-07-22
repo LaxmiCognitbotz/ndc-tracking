@@ -59,55 +59,66 @@ class StartupService:
 
     @staticmethod
     async def seed_super_admins(session: AsyncSession) -> None:
-        """Seed or ensure super admin users exist in the database."""
-        super_admin_env = os.getenv("SUPER_ADMIN_EMAIL", "")
-        super_admins = [e.strip().lower() for e in super_admin_env.split(",") if e.strip()]
+        try:
+            """Seed or ensure super admin users exist in the database."""
+            super_admin_env = os.getenv("SUPER_ADMIN_EMAIL", "")
+            super_admins = [e.strip().lower() for e in super_admin_env.split(",") if e.strip()]
 
-        for sa_email in super_admins:
-            stmt = select(NdcUserAccess).where(NdcUserAccess.email == sa_email)
+            for sa_email in super_admins:
+                stmt = select(NdcUserAccess).where(NdcUserAccess.email == sa_email)
+                res = await session.execute(stmt)
+                user_access = res.scalar_one_or_none()
+                if not user_access:
+                    print(f"Seeding super admin: {sa_email}")
+                    user_access = NdcUserAccess(
+                        email=sa_email,
+                        name=sa_email.split('@')[0],
+                        role="super_admin",
+                        status="approved",
+                        hashed_password=hash_password("Adani@123"),
+                        approved_at=datetime.now(timezone.utc).replace(tzinfo=None),
+                        approved_by="system"
+                    )
+                    session.add(user_access)
+                else:
+                    logger.info(f"Ensuring super admin privileges: {sa_email}")
+                    user_access.role = "super_admin"
+                    user_access.status = "approved"
+                    if not user_access.hashed_password:
+                        user_access.hashed_password = hash_password("Adani@123")
+                    # Update attributes in-place to ensure SQLAlchemy flushes correctly
+                    session.add(user_access)
+
+
+        except Exception as e:
+            import logging; logging.error('Error in seed_super_admins: %s', e, exc_info=True)
+            from fastapi import HTTPException
+            raise HTTPException(status_code=500, detail='An internal error occurred.')
+
+    @staticmethod
+    async def seed_demo_admin(session: AsyncSession) -> None:
+        try:
+            """Seed the demo admin user if it doesn't exist."""
+            stmt = select(NdcUserAccess).where(NdcUserAccess.email == "demo.admin@adani.com")
             res = await session.execute(stmt)
-            user_access = res.scalar_one_or_none()
-            if not user_access:
-                print(f"Seeding super admin: {sa_email}")
-                user_access = NdcUserAccess(
-                    email=sa_email,
-                    name=sa_email.split('@')[0],
-                    role="super_admin",
+            demo_admin = res.scalar_one_or_none()
+            if not demo_admin:
+                print("Seeding demo admin: demo.admin@adani.com")
+                demo_admin = NdcUserAccess(
+                    email="demo.admin@adani.com",
+                    name="Demo Admin",
+                    role="admin",
                     status="approved",
                     hashed_password=hash_password("Adani@123"),
                     approved_at=datetime.now(timezone.utc).replace(tzinfo=None),
                     approved_by="system"
                 )
-                session.add(user_access)
+                session.add(demo_admin)
             else:
-                print(f"Ensuring super admin privileges: {sa_email}")
-                user_access.role = "super_admin"
-                user_access.status = "approved"
-                if not user_access.hashed_password:
-                    user_access.hashed_password = hash_password("Adani@123")
-                # Update attributes in-place to ensure SQLAlchemy flushes correctly
-                session.add(user_access)
-
-
-    @staticmethod
-    async def seed_demo_admin(session: AsyncSession) -> None:
-        """Seed the demo admin user if it doesn't exist."""
-        stmt = select(NdcUserAccess).where(NdcUserAccess.email == "demo.admin@adani.com")
-        res = await session.execute(stmt)
-        demo_admin = res.scalar_one_or_none()
-        if not demo_admin:
-            print("Seeding demo admin: demo.admin@adani.com")
-            demo_admin = NdcUserAccess(
-                email="demo.admin@adani.com",
-                name="Demo Admin",
-                role="admin",
-                status="approved",
-                hashed_password=hash_password("Adani@123"),
-                approved_at=datetime.now(timezone.utc).replace(tzinfo=None),
-                approved_by="system"
-            )
-            session.add(demo_admin)
-        else:
-            if not demo_admin.hashed_password:
-                demo_admin.hashed_password = hash_password("Adani@123")
-            session.add(demo_admin)
+                if not demo_admin.hashed_password:
+                    demo_admin.hashed_password = hash_password("Adani@123")
+                session.add(demo_admin)
+        except Exception as e:
+            import logging; logging.error('Error in seed_demo_admin: %s', e, exc_info=True)
+            from fastapi import HTTPException
+            raise HTTPException(status_code=500, detail='An internal error occurred.')

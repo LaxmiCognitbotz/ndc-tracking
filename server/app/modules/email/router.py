@@ -1,3 +1,4 @@
+from fastapi import HTTPException
 from typing import List
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status

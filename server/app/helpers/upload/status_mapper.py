@@ -1,3 +1,4 @@
+from fastapi import HTTPException
 # Status normalization — Section 6 of DEVELOPMENT.md
 
 STATUS_MAP: dict[str, str] = {
@@ -29,7 +30,14 @@ APPROVAL_STAGES: list[tuple[str, str, str, int]] = [
 
 def normalize_status(raw: str | None) -> str | None:
     """Normalize raw Excel status value to internal enum."""
-    if raw is None or (isinstance(raw, str) and raw.strip() == ""):
-        return None
-    raw_stripped = raw.strip() if isinstance(raw, str) else str(raw).strip()
-    return STATUS_MAP.get(raw_stripped)
+    try:
+        if raw is None or (isinstance(raw, str) and raw.strip() == ""):
+            return None
+        raw_stripped = raw.strip() if isinstance(raw, str) else str(raw).strip()
+        return STATUS_MAP.get(raw_stripped)
+    except HTTPException:
+        raise
+    except Exception as e:
+        import logging; logging.error(f'Error in normalize_status: {e}', exc_info=True)
+        import fastapi
+        raise fastapi.HTTPException(status_code=500, detail='An internal server error occurred.')

@@ -1,18 +1,8 @@
-import asyncio
-import logging
-import os
-from contextlib import asynccontextmanager
-
 import uvicorn
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
-from fastapi.staticfiles import StaticFiles
-
-# Disable uvicorn access logs to reduce noise in production
-# logging.getLogger("uvicorn.access").disabled = True
 
 from app.helpers.startup.lifespan import lifespan
 from app.modules.auth import router as auth_router
@@ -29,15 +19,17 @@ from app.utils.response import (
     validation_exception_handler,
 )
 from spa_server.router import router as spa_router
+from config.logger import setup_logging
 
 # Load env variables
 load_dotenv(verbose=True)
+
+setup_logging()
 
 
 app = FastAPI(
     title="NDC & GCC Workflow Management API",
     version="1.0.0",
-    # description="Enterprise backend API for managing No Dues Certificates (NDC) and GCC workflows. Features automated email triggers, SharePoint integration for settlement records, and real-time status syncing.",
     default_response_class=UnifiedJSONResponse,
     lifespan=lifespan,
 )

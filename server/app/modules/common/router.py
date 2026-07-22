@@ -1,3 +1,4 @@
+from fastapi import HTTPException
 from datetime import date
 from typing import List, Optional
 
@@ -59,4 +60,9 @@ async def update_fnf_status_route(record_id: int, body: FnfUpdateRequest, db: As
 @router.post("/ndc-records/upload")
 async def upload_ndc_records(file: UploadFile = File(...), db: AsyncSession = Depends(get_db)):
     """Manually upload an Excel file for ingestion."""
-    return await UploadService.handle_ndc_upload(file, db)
+    try:
+        return await UploadService.handle_ndc_upload(file, db)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"An error occurred: {str(e)}")

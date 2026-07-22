@@ -22,13 +22,9 @@ def trim_pdf_to_max_pages(file_bytes: bytes, max_pages: int = 2, filename: str =
             doc.close()
             return file_bytes
         
-        # doc.select() is faster and more memory-efficient than creating a new PDF.
-        # It modifies the document in place by dropping the other pages.
         doc.select(range(max_pages))
         
         # Save to new bytes.
-        # garbage=3 removes unreferenced objects (like images from deleted pages)
-        # deflate=True compresses the PDF streams to minimize file size.
         trimmed_bytes = doc.tobytes(garbage=3, deflate=True)
         doc.close()
         

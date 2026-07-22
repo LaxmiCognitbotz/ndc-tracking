@@ -123,139 +123,146 @@ class EmployeeEmailService:
     @staticmethod
     async def import_employee_emails_excel(file: UploadFile, db: AsyncSession) -> Dict[str, Any]:
         """Import Employee configurations from an uploaded Excel file."""
-        if not file.filename:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No file provided")
-
-        ext = file.filename.split(".")[-1].lower()
-        if ext not in ("xlsx", "xls"):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Unsupported file type: .{ext}. Only .xlsx and .xls are allowed."
-            )
-
         try:
-            content = await file.read()
-            df = pd.read_excel(io.BytesIO(content))
-        except Exception as e:
-            logger.exception("Failed to parse imported Excel file")
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Failed to parse Excel file: {str(e)}"
-            )
+            if not file.filename:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No file provided")
 
-        # Clean and check columns
-        df.columns = [str(col).strip() for col in df.columns]
-
-        col_mapping = {}
-        for col in df.columns:
-            col_lower = col.lower()
-            if col_lower in ("person number", "person_number", "emp id", "employee id"):
-                col_mapping["person_number"] = col
-            elif col_lower in ("employee name", "employee_name", "emp name", "name"):
-                col_mapping["employee_name"] = col
-            elif col_lower == "email":
-                col_mapping["email"] = col
-
-        if "person_number" not in col_mapping or "employee_name" not in col_mapping or "email" not in col_mapping:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Excel file must contain 'Person Number', 'Employee Name' and 'Email' columns."
-            )
-
-        inserted = 0
-        skipped = 0
-        failed = 0
-        errors = []
-
-        try:
-            # Get all existing person numbers for duplicate checking
-            res = await db.execute(select(EmployeeEmailMaster.person_number))
-            existing_person_numbers = {p for p in res.scalars().all()}
-            
-            seen_person_numbers = set()
-
-            for idx, row in df.iterrows():
-                row_num = idx + 2  # Row index starts at 2 (Row 1 is header)
-                
-                raw_person_num = row[col_mapping["person_number"]]
-                raw_employee_name = row[col_mapping["employee_name"]]
-                raw_email = row[col_mapping["email"]]
-
-                # Skip completely empty rows
-                if pd.isna(raw_person_num) and pd.isna(raw_employee_name) and pd.isna(raw_email):
-                    continue
-
-                person_num_str = str(raw_person_num).strip() if not pd.isna(raw_person_num) else ""
-                employee_name_str = str(raw_employee_name).strip() if not pd.isna(raw_employee_name) else ""
-                email_str = str(raw_email).strip().lower() if not pd.isna(raw_email) else ""
-
-                if not person_num_str and not employee_name_str and not email_str:
-                    continue
-
-                # Validations
-                if not person_num_str:
-                    errors.append({"row": row_num, "message": "Person Number is required"})
-                    failed += 1
-                    continue
-
-                # Parse person number as int
-                try:
-                    # Remove decimals if float got imported (e.g. 12345.0)
-                    if "." in person_num_str:
-                        person_num_val = int(float(person_num_str))
-                    else:
-                        person_num_val = int(person_num_str)
-                except ValueError:
-                    errors.append({"row": row_num, "message": f"Invalid Person Number format: '{person_num_str}'. Must be a number."})
-                    failed += 1
-                    continue
-
-                if not employee_name_str:
-                    errors.append({"row": row_num, "message": "Employee Name is required"})
-                    failed += 1
-                    continue
-
-                if not email_str:
-                    errors.append({"row": row_num, "message": "Email is required"})
-                    failed += 1
-                    continue
-
-                email_regex = r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
-                if not re.match(email_regex, email_str):
-                    errors.append({"row": row_num, "message": "Invalid email format"})
-                    failed += 1
-                    continue
-
-                # Duplicate check
-                if person_num_val in existing_person_numbers or person_num_val in seen_person_numbers:
-                    skipped += 1
-                    continue
-
-                seen_person_numbers.add(person_num_val)
-                new_config = EmployeeEmailMaster(
-                    person_number=person_num_val,
-                    employee_name=employee_name_str,
-                    email=email_str
+            ext = file.filename.split(".")[-1].lower()
+            if ext not in ("xlsx", "xls"):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Unsupported file type: .{ext}. Only .xlsx and .xls are allowed."
                 )
-                db.add(new_config)
-                inserted += 1
 
-            if inserted > 0:
-                await db.commit()
+            try:
+                content = await file.read()
+                df = pd.read_excel(io.BytesIO(content))
+            except Exception as e:
+                logger.exception("Failed to parse imported Excel file")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Failed to parse Excel file: {str(e)}"
+                )
 
-            return {
-                "success": True,
-                "inserted": inserted,
-                "skipped": skipped,
-                "failed": failed,
-                "errors": errors
-            }
+            # Clean and check columns
+            df.columns = [str(col).strip() for col in df.columns]
+
+            col_mapping = {}
+            for col in df.columns:
+                col_lower = col.lower()
+                if col_lower in ("person number", "person_number", "emp id", "employee id"):
+                    col_mapping["person_number"] = col
+                elif col_lower in ("employee name", "employee_name", "emp name", "name"):
+                    col_mapping["employee_name"] = col
+                elif col_lower == "email":
+                    col_mapping["email"] = col
+
+            if "person_number" not in col_mapping or "employee_name" not in col_mapping or "email" not in col_mapping:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Excel file must contain 'Person Number', 'Employee Name' and 'Email' columns."
+                )
+
+            inserted = 0
+            skipped = 0
+            failed = 0
+            errors = []
+
+            try:
+                # Get all existing person numbers for duplicate checking
+                res = await db.execute(select(EmployeeEmailMaster.person_number))
+                existing_person_numbers = {p for p in res.scalars().all()}
+            
+                seen_person_numbers = set()
+
+                for idx, row in df.iterrows():
+                    row_num = idx + 2  # Row index starts at 2 (Row 1 is header)
+                
+                    raw_person_num = row[col_mapping["person_number"]]
+                    raw_employee_name = row[col_mapping["employee_name"]]
+                    raw_email = row[col_mapping["email"]]
+
+                    # Skip completely empty rows
+                    if pd.isna(raw_person_num) and pd.isna(raw_employee_name) and pd.isna(raw_email):
+                        continue
+
+                    person_num_str = str(raw_person_num).strip() if not pd.isna(raw_person_num) else ""
+                    employee_name_str = str(raw_employee_name).strip() if not pd.isna(raw_employee_name) else ""
+                    email_str = str(raw_email).strip().lower() if not pd.isna(raw_email) else ""
+
+                    if not person_num_str and not employee_name_str and not email_str:
+                        continue
+
+                    # Validations
+                    if not person_num_str:
+                        errors.append({"row": row_num, "message": "Person Number is required"})
+                        failed += 1
+                        continue
+
+                    # Parse person number as int
+                    try:
+                        # Remove decimals if float got imported (e.g. 12345.0)
+                        if "." in person_num_str:
+                            person_num_val = int(float(person_num_str))
+                        else:
+                            person_num_val = int(person_num_str)
+                    except ValueError:
+                        errors.append({"row": row_num, "message": f"Invalid Person Number format: '{person_num_str}'. Must be a number."})
+                        failed += 1
+                        continue
+
+                    if not employee_name_str:
+                        errors.append({"row": row_num, "message": "Employee Name is required"})
+                        failed += 1
+                        continue
+
+                    if not email_str:
+                        errors.append({"row": row_num, "message": "Email is required"})
+                        failed += 1
+                        continue
+
+                    email_regex = r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
+                    if not re.match(email_regex, email_str):
+                        errors.append({"row": row_num, "message": "Invalid email format"})
+                        failed += 1
+                        continue
+
+                    # Duplicate check
+                    if person_num_val in existing_person_numbers or person_num_val in seen_person_numbers:
+                        skipped += 1
+                        continue
+
+                    seen_person_numbers.add(person_num_val)
+                    new_config = EmployeeEmailMaster(
+                        person_number=person_num_val,
+                        employee_name=employee_name_str,
+                        email=email_str
+                    )
+                    db.add(new_config)
+                    inserted += 1
+
+                if inserted > 0:
+                    await db.commit()
+
+                return {
+                    "success": True,
+                    "inserted": inserted,
+                    "skipped": skipped,
+                    "failed": failed,
+                    "errors": errors
+                }
+            except Exception as e:
+                logger.exception("Failed to import employee configuration data into database")
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Database import failed: {str(e)}"
+                )
+        except HTTPException:
+            raise
         except Exception as e:
-            logger.exception("Failed to import employee configuration data into database")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Database import failed: {str(e)}"
-            )
+            import logging; logging.error(f'Error in import_employee_emails_excel: {e}', exc_info=True)
+            import fastapi
+            raise fastapi.HTTPException(status_code=500, detail='An internal server error occurred.')
 
 
     @staticmethod

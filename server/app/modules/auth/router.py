@@ -1,3 +1,4 @@
+from fastapi import HTTPException
 import logging
 from typing import Optional
 

@@ -1,5 +1,4 @@
 import asyncio
-import os
 
 from dotenv import load_dotenv
 
@@ -11,7 +10,19 @@ from app.models.ndc_record import NdcRecord
 from app.models.ndc_user_access import NdcUserAccess
 from app.models.rm_email_configuration import RmEmailConfiguration
 from app.models.upload_batch import UploadBatch
+from app.models.email_recipient import EmailRecipient
 from config.database import engine
+
+__all__ = [
+    "EmployeeEmailMaster",
+    "NdcApproval",
+    "NdcAuthAuditLog",
+    "NdcRecord",
+    "NdcUserAccess",
+    "RmEmailConfiguration",
+    "UploadBatch",
+    "EmailRecipient",
+]
 
 
 async def init_database():

@@ -1,8 +1,7 @@
+from fastapi import HTTPException
 import logging
-from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.jwt_bearer import get_current_user
@@ -16,8 +15,15 @@ logger = logging.getLogger(__name__)
 
 # Custom dependency to enforce super_admin access
 async def require_super_admin(current_user: dict = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    email = current_user.get("sub")
-    return await UsersService.verify_super_admin(email, db)
+    try:
+        email = current_user.get("sub")
+        return await UsersService.verify_super_admin(email, db)
+    except HTTPException:
+        raise
+    except Exception as e:
+        import logging; logging.error(f'Error in require_super_admin: {e}', exc_info=True)
+        import fastapi
+        raise fastapi.HTTPException(status_code=500, detail='An internal server error occurred.')
 
 
 admin_router = APIRouter(prefix="/api/admin", tags=["Admin Management"], dependencies=[Depends(require_super_admin)])

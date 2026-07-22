@@ -1,6 +1,6 @@
 from sqlalchemy import Column, DateTime, Integer, String, func
 
-from app.models import Base
+from config.database import Base
 
 
 class EmailRecipient(Base):
