@@ -330,15 +330,15 @@ export function EmployeeEmailMasterPage() {
 
   return (
     <div className="p-8 space-y-6">
-      <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-3xl font-bold text-foreground">Employee Email Master</h1>
           <p className="text-muted-foreground mt-1">Manage employee personal emails for automatic delivery of F&F documents</p>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-row items-center gap-3 shrink-0">
           <button
             onClick={handleDownloadSample}
-            className="flex items-center gap-2 px-4 py-2 border border-border bg-card hover:bg-muted text-foreground text-sm font-medium rounded-[4px] transition-colors"
+            className="flex items-center gap-2 px-4 py-2 border border-border bg-card hover:bg-muted text-foreground text-sm font-medium rounded-[4px] transition-colors shrink-0"
           >
             <Download className="w-4 h-4 text-muted-foreground" />
             Download Sample Excel
@@ -349,7 +349,7 @@ export function EmployeeEmailMasterPage() {
               setImportSummary(null);
               setFileToUpload(null);
             }}
-            className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground text-sm font-medium rounded-[4px] transition-colors shadow-sm"
+            className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground text-sm font-medium rounded-[4px] transition-colors shadow-sm shrink-0"
           >
             <Upload className="w-4 h-4" />
             Import Excel
@@ -378,7 +378,7 @@ export function EmployeeEmailMasterPage() {
               </button>
             )}
           </div>
-          
+
           <button
             onClick={() => {
               setIsAddOpen(true);
