@@ -78,7 +78,7 @@ class StartupService:
                 res = await session.execute(stmt)
                 user_access = res.scalar_one_or_none()
                 if not user_access:
-                    print(f"Seeding super admin: {sa_email}")
+                    logger.info(f"Seeding super admin: {sa_email}")
                     user_access = NdcUserAccess(
                         email=sa_email,
                         name=sa_email.split('@')[0],
@@ -112,7 +112,7 @@ class StartupService:
             res = await session.execute(stmt)
             demo_admin = res.scalar_one_or_none()
             if not demo_admin:
-                print("Seeding demo admin: demo.admin@adani.com")
+                logger.info("Seeding demo admin: demo.admin@adani.com")
                 demo_admin = NdcUserAccess(
                     email="demo.admin@adani.com",
                     name="Demo Admin",

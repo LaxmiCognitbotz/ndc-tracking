@@ -18,9 +18,18 @@ def run_sync():
     if not alembic_exe.exists():
         alembic_exe = "alembic" # fallback if activated
         
+    print("\n[1/3] Checking for any pending migrations from GitHub...")
+    res_upg_initial = subprocess.run(
+        [str(alembic_exe), "upgrade", "head"], 
+        capture_output=True, text=True
+    )
+    if res_upg_initial.returncode != 0:
+        print(f"[ERROR] Error applying existing migrations:\n{res_upg_initial.stderr}")
+        sys.exit(1)
+        
     rev_msg = f"auto_sync_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
     
-    print("\n[1/2] Comparing database schema against your SQLAlchemy models...")
+    print("\n[2/3] Comparing database schema against your SQLAlchemy models...")
     res_gen = subprocess.run(
         [str(alembic_exe), "revision", "--autogenerate", "-m", rev_msg], 
         capture_output=True, text=True
@@ -38,17 +47,17 @@ def run_sync():
         print("=" * 60)
         return
         
-    print("\n[2/2] Applying the new schema changes to the database...")
-    res_upg = subprocess.run(
+    print("\n[3/3] Applying the newly generated schema changes to the database...")
+    res_upg_final = subprocess.run(
         [str(alembic_exe), "upgrade", "head"], 
         capture_output=True, text=True
     )
     
-    if res_upg.returncode != 0:
-        print(f"[ERROR] Error applying migration:\n{res_upg.stderr}")
+    if res_upg_final.returncode != 0:
+        print(f"[ERROR] Error applying new migration:\n{res_upg_final.stderr}")
         sys.exit(1)
         
-    print(res_upg.stdout.strip())
+    print(res_upg_final.stdout.strip())
     print("\n[SUCCESS] Database schema synchronized successfully!")
     print("=" * 60)
 
