@@ -30,6 +30,7 @@ logs/
 *.sqlite
 *.sqlite3
 *.db
+versions/
 
 
 
