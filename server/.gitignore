@@ -3,7 +3,7 @@ __pycache__/
 *.py[oc]
 build/
 dist/
-__init__.py
+
 
 wheels/
 *.egg-info
@@ -31,6 +31,8 @@ logs/
 *.sqlite3
 *.db
 
+
+
 # VS Code and IDEs
 .vscode/
 *.code-workspace
@@ -40,7 +42,3 @@ logs/
 # OS generated files
 .DS_Store
 Thumbs.db
-
-# Alembic
-alembic.ini
-alembic/versions/
